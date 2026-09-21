@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>추석 연휴 문여는 병원·약국 — 안양시 동안구</title>
+<meta name="description" content="2026년 추석 연휴(9.24~9.27) 안양시 동안구에서 문 여는 병원·약국을 날짜별로 지도에 표시합니다.">
+<meta name="color-scheme" content="light dark">
+<meta property="og:title" content="추석 연휴 문여는 병원·약국 — 안양시 동안구">
+<meta property="og:description" content="2026년 추석 연휴 문 여는 의료기관·약국 98곳을 날짜별로 지도에서 찾아보세요.">
+<link rel="icon" href="assets/favicon.svg">
+<link rel="preconnect" href="https://cdn.jsdelivr.net">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@10.3.1/ol.css">
+<link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar__title">
+    <h1>추석 연휴 문여는 병원·약국</h1>
+    <p>안양시 동안구 · 2026.9.24 ~ 9.27</p>
+  </div>
+  <button type="button" class="icon-btn" id="btn-info" aria-label="안내 및 출처 보기" title="안내 및 출처">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 7.6v.4"/></svg>
+  </button>
+</header>
+
+<nav class="daybar" id="daybar" aria-label="날짜 선택"></nav>
+
+<p class="notice" id="today-notice" hidden></p>
+
+<div class="toolbar">
+  <div class="chips" id="cat-chips" role="group" aria-label="종류 필터"></div>
+  <div class="toolbar__row">
+    <div class="search">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+      <input type="search" id="search" placeholder="이름 · 주소 검색" autocomplete="off" aria-label="이름 또는 주소 검색">
+    </div>
+    <button type="button" class="toggle" id="btn-opennow" aria-pressed="false">지금 영업중</button>
+    <button type="button" class="toggle" id="btn-locate" title="내 위치 기준으로 정렬">내 위치</button>
+  </div>
+</div>
+
+<main class="layout">
+  <section class="mapwrap" aria-label="지도">
+    <div id="map"></div>
+    <div id="popup" class="popup" hidden></div>
+    <div class="legend" id="legend" aria-hidden="true"></div>
+  </section>
+
+  <section class="panel" aria-label="목록">
+    <div class="panel__head">
+      <span id="result-count">—</span>
+      <button type="button" class="linkish" id="btn-sheet" aria-expanded="false">목록</button>
+    </div>
+    <ul class="list" id="list"></ul>
+  </section>
+</main>
+
+<dialog id="info-dialog" class="dialog">
+  <form method="dialog">
+    <h2>안내 및 출처</h2>
+    <div id="info-body"></div>
+    <menu><button value="close" class="btn-primary">닫기</button></menu>
+  </form>
+</dialog>
+
+<script src="https://cdn.jsdelivr.net/npm/ol@10.3.1/dist/ol.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>
