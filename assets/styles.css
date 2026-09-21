@@ -278,6 +278,9 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 
 /* ───────── 하단 시트 ───────── */
 
+/* display:flex 가 hidden 속성의 display:none 을 이기므로 명시적으로 눌러 준다. */
+.sheet[hidden] { display: none; }
+
 .sheet {
   position: absolute;
   z-index: 30;
