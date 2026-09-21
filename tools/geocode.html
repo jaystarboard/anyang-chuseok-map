@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>좌표 생성기 — 카카오 지오코딩</title>
+<style>
+  body { font: 14px/1.5 -apple-system, "Apple SD Gothic Neo", sans-serif; margin: 20px; max-width: 980px; }
+  h1 { font-size: 17px; }
+  #bar { position: sticky; top: 0; background: #fff; padding: 10px 0; border-bottom: 1px solid #ddd; }
+  button { font: inherit; padding: 6px 14px; }
+  #log { font-family: ui-monospace, monospace; font-size: 12px; white-space: pre-wrap; max-height: 40vh; overflow: auto;
+         background: #f6f7f9; padding: 10px; border-radius: 6px; margin-top: 10px; }
+  textarea { width: 100%; height: 40vh; font-family: ui-monospace, monospace; font-size: 11px; margin-top: 10px; }
+  .warn { color: #b45309; } .err { color: #b91c1c; } .ok { color: #15803d; }
+</style>
+</head>
+<body>
+<h1>좌표 생성기</h1>
+<p><code>tools/addresses.json</code> 의 도로명주소를 카카오 지오코더로 변환해
+   <code>tools/coords.json</code> 내용을 만듭니다. 결과를 복사해 저장하세요.</p>
+<p>주소검색(<code>addressSearch</code>)이 1순위, 실패하면 기관명으로 장소검색(<code>keywordSearch</code>)합니다.
+   카카오 JS 키는 도메인 제한이 있어 등록된 도메인(GitHub Pages)에서만 동작합니다.</p>
+
+<div id="bar"><button id="run">실행</button> <span id="stat"></span></div>
+<div id="log"></div>
+<textarea id="out" readonly placeholder="완료되면 여기에 JSON 이 나옵니다"></textarea>
+
+<script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=86cddb6e2da26d4a69c71ec3b7979d5d&libraries=services&autoload=false"></script>
+<script>
+const log = (msg, cls) => {
+  const el = document.createElement("div");
+  if (cls) el.className = cls;
+  el.textContent = msg;
+  document.getElementById("log").appendChild(el);
+  el.scrollIntoView({ block: "nearest" });
+};
+
+if (!window.kakao || !window.kakao.maps) {
+  log("카카오 SDK 로드 실패 — 이 도메인이 카카오 개발자 콘솔에 등록되어 있는지 확인하세요.", "err");
+} else {
+  kakao.maps.load(() => {
+    document.getElementById("run").addEventListener("click", run, { once: true });
+    log("SDK 준비 완료. [실행] 을 누르세요.", "ok");
+  });
+}
+
+/** 카카오 API 는 콜백식이라 순차 처리를 위해 Promise 로 감싼다. */
+function addressSearch(geocoder, query) {
+  return new Promise((res) => geocoder.addressSearch(query, (r, s) => res({ r, s })));
+}
+function keywordSearch(places, query) {
+  return new Promise((res) => places.keywordSearch(query, (r, s) => res({ r, s }),
+    { location: new kakao.maps.LatLng(37.395, 126.94), radius: 12000 }));
+}
+
+async function run() {
+  const items = await (await fetch("addresses.json", { cache: "no-cache" })).json();
+  const geocoder = new kakao.maps.services.Geocoder();
+  const places = new kakao.maps.services.Places();
+  const cache = new Map();                       // 같은 건물에 여러 기관이 있으므로 주소 단위로 캐시
+  const out = {};
+  let viaAddr = 0, viaKeyword = 0, failed = 0;
+
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i];
+    document.getElementById("stat").textContent = `${i + 1} / ${items.length}`;
+
+    let hit = cache.get(it.query);
+    if (!hit) {
+      const { r, s } = await addressSearch(geocoder, it.query);
+      if (s === kakao.maps.services.Status.OK && r.length) {
+        hit = { lat: +r[0].y, lon: +r[0].x, via: "address", matched: r[0].address_name };
+        cache.set(it.query, hit);
+      }
+      await new Promise((z) => setTimeout(z, 60));
+    }
+
+    if (hit) {
+      viaAddr++;
+    } else {
+      const { r, s } = await keywordSearch(places, `${it.gu} ${it.name}`);
+      if (s === kakao.maps.services.Status.OK && r.length) {
+        hit = { lat: +r[0].y, lon: +r[0].x, via: "keyword", matched: r[0].road_address_name || r[0].address_name };
+        viaKeyword++;
+        log(`  keyword 폴백: ${it.name} -> ${hit.matched}`, "warn");
+      } else {
+        failed++;
+        log(`  실패: ${it.name} / ${it.query}`, "err");
+      }
+      await new Promise((z) => setTimeout(z, 80));
+    }
+
+    if (hit) out[`${it.gu}|${it.name}`] = { lat: +hit.lat.toFixed(6), lon: +hit.lon.toFixed(6),
+                                            via: hit.via, matched: hit.matched, query: it.query };
+  }
+
+  log(`\n완료 — 주소검색 ${viaAddr}, 장소검색 폴백 ${viaKeyword}, 실패 ${failed} / 총 ${items.length}`,
+      failed ? "err" : "ok");
+  document.getElementById("out").value = JSON.stringify(out, null, 1);
+  window.__coords = out;
+  window.__done = { viaAddr, viaKeyword, failed, total: items.length };
+}
+</script>
+</body>
+</html>
