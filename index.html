@@ -2,70 +2,67 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>추석 연휴 문여는 병원·약국 — 안양시 동안구</title>
-<meta name="description" content="2026년 추석 연휴(9.24~9.27) 안양시 동안구에서 문 여는 병원·약국을 날짜별로 지도에 표시합니다.">
-<meta name="color-scheme" content="light dark">
-<meta property="og:title" content="추석 연휴 문여는 병원·약국 — 안양시 동안구">
-<meta property="og:description" content="2026년 추석 연휴 문 여는 의료기관·약국 98곳을 날짜별로 지도에서 찾아보세요.">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>추석 연휴 문여는 병원·약국 — 안양시 전체</title>
+<meta name="description" content="2026년 추석 연휴(9.24~9.27) 안양시 동안구·만안구에서 문 여는 병원·약국 155곳을 날짜별로 지도에 표시합니다.">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#ffffff">
+<meta property="og:title" content="추석 연휴 문여는 병원·약국 — 안양시 전체">
+<meta property="og:description" content="2026년 추석 연휴 문 여는 의료기관·약국 155곳을 날짜별로 지도에서 찾아보세요.">
 <link rel="icon" href="assets/favicon.svg">
-<link rel="preconnect" href="https://cdn.jsdelivr.net">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@10.3.1/ol.css">
 <link rel="stylesheet" href="assets/styles.css">
 </head>
 <body>
 
-<header class="topbar">
-  <div class="topbar__title">
-    <h1>추석 연휴 문여는 병원·약국</h1>
-    <p>안양시 동안구 · 2026.9.24 ~ 9.27</p>
-  </div>
-  <button type="button" class="icon-btn" id="btn-info" aria-label="안내 및 출처 보기" title="안내 및 출처">
+<header class="bar">
+  <h1>추석 연휴 문여는 병원·약국</h1>
+  <span class="bar__scope">안양시 전체</span>
+  <button type="button" class="bar__info" id="btn-info" aria-label="안내 및 출처">
     <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 7.6v.4"/></svg>
   </button>
 </header>
 
-<nav class="daybar" id="daybar" aria-label="날짜 선택"></nav>
+<nav class="days" id="days" aria-label="날짜 선택"></nav>
 
-<p class="notice" id="today-notice" hidden></p>
+<main class="stage">
+  <div id="map" role="application" aria-label="지도"></div>
 
-<div class="toolbar">
-  <div class="chips" id="cat-chips" role="group" aria-label="종류 필터"></div>
-  <div class="toolbar__row">
+  <div class="ov ov--top">
     <div class="search">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
-      <input type="search" id="search" placeholder="이름 · 주소 검색" autocomplete="off" aria-label="이름 또는 주소 검색">
+      <input type="search" id="search" placeholder="기관명 · 주소 검색" autocomplete="off" aria-label="기관명 또는 주소 검색">
+      <button type="button" id="search-clear" aria-label="검색어 지우기" hidden>
+        <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
     </div>
-    <button type="button" class="toggle" id="btn-opennow" aria-pressed="false">지금 영업중</button>
-    <button type="button" class="toggle" id="btn-locate" title="내 위치 기준으로 정렬">내 위치</button>
+    <div class="chips" id="chips" role="group" aria-label="종류 필터"></div>
   </div>
-</div>
 
-<main class="layout">
-  <section class="mapwrap" aria-label="지도">
-    <div id="map"></div>
-    <div id="popup" class="popup" hidden></div>
-    <div class="legend" id="legend" aria-hidden="true"></div>
-  </section>
+  <div class="ov ov--fabs">
+    <button type="button" class="fab" id="btn-list" aria-label="목록 보기">
+      <svg viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg>
+      <b id="fab-count">0</b>
+    </button>
+    <button type="button" class="fab" id="btn-locate" aria-label="내 위치">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3"/><circle cx="12" cy="12" r="7.5"/></svg>
+    </button>
+  </div>
 
-  <section class="panel" aria-label="목록">
-    <div class="panel__head">
-      <span id="result-count">—</span>
-      <button type="button" class="linkish" id="btn-sheet" aria-expanded="false">목록</button>
-    </div>
-    <ul class="list" id="list"></ul>
+  <section class="sheet" id="sheet" hidden aria-live="polite">
+    <button type="button" class="sheet__grip" id="sheet-close" aria-label="닫기"></button>
+    <div class="sheet__body" id="sheet-body"></div>
   </section>
 </main>
 
-<dialog id="info-dialog" class="dialog">
+<dialog id="info" class="dlg">
   <form method="dialog">
     <h2>안내 및 출처</h2>
     <div id="info-body"></div>
-    <menu><button value="close" class="btn-primary">닫기</button></menu>
+    <menu><button value="close">닫기</button></menu>
   </form>
 </dialog>
 
-<script src="https://cdn.jsdelivr.net/npm/ol@10.3.1/dist/ol.js"></script>
+<script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=86cddb6e2da26d4a69c71ec3b7979d5d&autoload=false"></script>
 <script src="assets/app.js"></script>
 </body>
 </html>

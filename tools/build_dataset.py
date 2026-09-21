@@ -141,6 +141,17 @@ def verify(gu: str, rows: list[dict], subtotals: dict[str, list[int]]) -> None:
     print(f"  [{gu}] 소계 검증 통과 — 의료기관 {n_med}{got_med}, 약국 {n_ph}{got_ph}")
 
 
+def merged_value(ws, row: int, col: int):
+    """병합된 셀은 좌상단에만 값이 있다. 달빛 시트의 시군 컬럼이 여러 행에 걸쳐 병합돼 있다."""
+    v = ws.cell(row, col).value
+    if v is not None:
+        return v
+    for rng in ws.merged_cells.ranges:
+        if rng.min_row <= row <= rng.max_row and rng.min_col <= col <= rng.max_col:
+            return ws.cell(rng.min_row, rng.min_col).value
+    return None
+
+
 def tel_with_area(tel: str) -> str:
     """경기도 시트는 지역번호를 뺀 채로 적혀 있다. 1588 같은 전국대표번호는 그대로 둔다."""
     t = norm(tel).replace(" ", "")
@@ -198,7 +209,7 @@ def read_moon_sheet(wb) -> list[dict]:
                 weekday = line
             elif any(k in head for k in ("토", "일", "공")):
                 holiday = line
-        rows.append({"set": "moon", "gu": norm(ws.cell(r, 2).value), "cat": "달빛",
+        rows.append({"set": "moon", "gu": norm(merged_value(ws, r, 2)), "cat": "달빛",
                      "kind": "달빛어린이병원", "name": name, "address": "", "tel": "",
                      "partner": norm(ws.cell(r, 4).value),
                      "weekday": weekday, "holiday": holiday})
