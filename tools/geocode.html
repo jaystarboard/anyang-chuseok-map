@@ -50,51 +50,48 @@ function addressSearch(geocoder, query) {
 }
 function keywordSearch(places, query) {
   return new Promise((res) => places.keywordSearch(query, (r, s) => res({ r, s }),
-    { location: new kakao.maps.LatLng(37.395, 126.94), radius: 12000 }));
+    { location: new kakao.maps.LatLng(37.4, 127.1), radius: 20000 }));
 }
 
 async function run() {
   const items = await (await fetch("addresses.json", { cache: "no-cache" })).json();
   const geocoder = new kakao.maps.services.Geocoder();
   const places = new kakao.maps.services.Places();
-  const cache = new Map();                       // 같은 건물에 여러 기관이 있으므로 주소 단위로 캐시
+  const cache = new Map();                       // 같은 건물에 여러 기관이 있으므로 질의 단위로 캐시
   const out = {};
   let viaAddr = 0, viaKeyword = 0, failed = 0;
 
   for (let i = 0; i < items.length; i++) {
     const it = items[i];
     document.getElementById("stat").textContent = `${i + 1} / ${items.length}`;
+    const ck = it.mode + "|" + it.query;
+    let hit = cache.get(ck);
 
-    let hit = cache.get(it.query);
-    if (!hit) {
+    if (!hit && it.mode === "address") {
       const { r, s } = await addressSearch(geocoder, it.query);
       if (s === kakao.maps.services.Status.OK && r.length) {
         hit = { lat: +r[0].y, lon: +r[0].x, via: "address", matched: r[0].address_name };
-        cache.set(it.query, hit);
       }
       await new Promise((z) => setTimeout(z, 60));
     }
-
-    if (hit) {
-      viaAddr++;
-    } else {
-      const { r, s } = await keywordSearch(places, `${it.gu} ${it.name}`);
+    // 주소가 없는 달빛어린이병원, 그리고 주소검색이 실패한 건은 기관명으로 찾는다
+    if (!hit) {
+      const { r, s } = await keywordSearch(places, it.mode === "keyword" ? it.query : `${it.gu} ${it.name}`);
       if (s === kakao.maps.services.Status.OK && r.length) {
-        hit = { lat: +r[0].y, lon: +r[0].x, via: "keyword", matched: r[0].road_address_name || r[0].address_name };
-        viaKeyword++;
-        log(`  keyword 폴백: ${it.name} -> ${hit.matched}`, "warn");
-      } else {
-        failed++;
-        log(`  실패: ${it.name} / ${it.query}`, "err");
+        hit = { lat: +r[0].y, lon: +r[0].x, via: "keyword",
+                matched: r[0].road_address_name || r[0].address_name };
+        log(`  keyword: ${it.name} -> ${hit.matched}`, it.mode === "keyword" ? null : "warn");
       }
       await new Promise((z) => setTimeout(z, 80));
     }
 
-    if (hit) out[`${it.gu}|${it.name}`] = { lat: +hit.lat.toFixed(6), lon: +hit.lon.toFixed(6),
-                                            via: hit.via, matched: hit.matched, query: it.query };
+    if (!hit) { failed++; log(`  실패: ${it.key} / ${it.query}`, "err"); continue; }
+    cache.set(ck, hit);
+    if (hit.via === "address") viaAddr++; else viaKeyword++;
+    out[it.key] = [+hit.lat.toFixed(6), +hit.lon.toFixed(6)];
   }
 
-  log(`\n완료 — 주소검색 ${viaAddr}, 장소검색 폴백 ${viaKeyword}, 실패 ${failed} / 총 ${items.length}`,
+  log(`\n완료 — 주소검색 ${viaAddr}, 장소검색 ${viaKeyword}, 실패 ${failed} / 총 ${items.length}`,
       failed ? "err" : "ok");
   document.getElementById("out").value = JSON.stringify(out, null, 1);
   window.__coords = out;

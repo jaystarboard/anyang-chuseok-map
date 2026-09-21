@@ -1,255 +1,320 @@
 #!/usr/bin/env python3
-"""동안구보건소 배포 PDF -> data/facilities.json 빌드.
+"""안양시 배포 XLSX -> data/facilities.json 빌드 (동안구 + 만안구).
 
-PDF 표에는 괘선이 있어 pdfplumber 의 extract_tables() 로 일자별 컬럼이 그대로 분리된다.
-extract_text() 만 쓰면 "09:00~16:00 10:00~13:00" 이 어느 날짜인지 복원할 수 없으므로 반드시 표로 읽는다.
+원본: 안양시보건소 공지 「2026년 추석 연휴 문여는 의료기관 및 약국 현황 안내」의 첨부
+      ★(안양시)2026 추석 연휴기간 문 여는 병원 및 약국 명단(최종배포용).xlsx
+      https://www.anyang.go.kr/health/selectBbsNttView.do?key=1369&bbsNo=108&nttNo=458257
 
-좌표는 OpenStreetMap 의 도로명주소 태그(addr:street/addr:housenumber)에 대조해 구한다.
- 1) (도로명, 건물번호) 완전 일치 -> exact
- 2) 같은 도로의 앞뒤 건물번호 선형보간 -> approx
- 3) 보간 간격이 커 신뢰할 수 없는 소수 항목은 MANUAL_FIX 로 고정
-결과 좌표의 정확도는 acc 필드로 노출하고, 화면에서 "위치 근사" 배지로 표시한다.
+두 구의 시트 양식이 다르다.
+ - 동안구: 9열(비고 포함), 헤더 `9.24.(목)`, `응급실소계/병의원소계/약국소계` 3종 소계
+ - 만안구: 8열(비고 없음), 헤더 `9. 24.(목)`(공백 있음), 소계 행이 전부 `소계` 한 단어,
+           6행에 별도 총계 문구, 일부 주소가 `삼덕로 9` 처럼 시·구 없이 도로명만 적혀 있음
+그래서 시트별 파서를 두지 않고 헤더 위치와 소계 패턴을 찾아 공통 처리한다.
+
+같은 파일의 뒤 두 시트는 경기도 전역 자료라 별도 레이어로 싣는다.
+ - 경기도 응급의료기관: 권역구분명(권역센터/지역센터/지역기관)으로 나눈다. 24시간 운영.
+ - 경기도 달빛어린이병원: 한 기관이 2행(평일 / 토·일·공휴일 운영시간)에 걸쳐 있다.
+   주소 컬럼이 없어 좌표는 기관명 장소검색으로 잡는다.
+   9.24~9.27 은 모두 공휴일·일요일이므로 화면에는 (토/일/공) 시간을 쓴다.
+
+좌표는 tools/coords.json (카카오 지오코딩 결과) 에서 가져온다.
 
 사용법:
-    pip install pdfplumber
-    python tools/build_dataset.py <원본 PDF 경로>
+    pip install openpyxl
+    python tools/build_dataset.py "<배포 XLSX 경로>"
 """
 from __future__ import annotations
 
 import json
-import math
 import os
 import re
-import statistics
 import sys
-import time
-import urllib.parse
-import urllib.request
-from collections import Counter, defaultdict
+from collections import Counter
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "data", "facilities.json")
-CACHE = os.path.join(ROOT, "tools", ".osm_addr_cache.json")
+COORDS = os.path.join(ROOT, "tools", "coords.json")
 
-BBOX = (37.340, 126.900, 37.430, 127.010)
-OVERPASS_MIRRORS = (
-    "https://overpass-api.de/api/interpreter",
-    "https://overpass.kumi.systems/api/interpreter",
-    "https://overpass.private.coffee/api/interpreter",
-)
 
+SHEETS = ("동안구", "만안구")
+ER_SHEET = "경기도 응급의료기관"
+MOON_SHEET = "경기도 달빛어린이병원"
 DAYS = [
     {"date": "2026-09-24", "label": "9.24", "dow": "목"},
     {"date": "2026-09-25", "label": "9.25", "dow": "금", "holiday": "추석"},
     {"date": "2026-09-26", "label": "9.26", "dow": "토"},
     {"date": "2026-09-27", "label": "9.27", "dow": "일"},
 ]
+ALWAYS_OPEN = "응급실운영"
 
+# 원본 「구분」 -> 화면 분류. 응급실운영 시간이 찍힌 곳은 구분과 무관하게 응급실로 올린다
+# (한밤중에 필요한 정보는 "지금 여는 데가 어디냐" 이므로).
 CATEGORY = {
-    "권역응급의료센터": "응급실", "병원": "병원", "한방병원": "한방",
-    "의원": "의원", "치과의원": "치과", "한의원": "한방", "약국": "약국",
+    "권역응급의료센터": "응급실", "지역응급의료센터": "응급실",
+    "종합병원": "병원", "병원": "병원", "요양병원": "병원",
+    "한방병원": "한방", "한의원": "한방",
+    "의원": "의원", "치과의원": "치과", "약국": "약국",
 }
-SKIP_ROWS = {"구분", "응급실소계", "병의원소계", "약국소계"}
+PHARMACY_KINDS = {"약국"}
 
-# 보간 간격이 25 번지를 넘어 신뢰할 수 없는 항목. 카카오맵으로 지번을 확인한 뒤
-# OSM 랜드마크 좌표(세명약국) 또는 해당 번길의 도로 중심점(나머지)을 사용한다.
-#
-# 관악대로 349(안세온누리약국)도 Δ38 경고가 뜨지만 보간값을 그대로 쓴다.
-# 그 구간의 기준번지 282~387 이 9.6m/번호로 도로명주소 부여 규칙(20m 마다 2 증가)과 맞아
-# 선형보간이 ±50m 안에 들어온다. 도로 세그먼트 중심을 주는 Nominatim 결과(497m 차)보다 정확하다.
-MANUAL_FIX = {
-    "세명약국":      (37.382258, 126.969697, "흥안대로 313 = 평촌동 934-1 안양농수산물도매시장"),
-    "평촌미라클의원": (37.392177, 126.978052, "흥안대로434번길 중심점 (도로 전체 186m)"),
-    "성애약국":      (37.400156, 126.974585, "흥안대로517번길 중심점 (도로 전체 287m)"),
-}
+# 경기도 응급의료기관 권역구분명 -> 화면 분류
+ER_TIERS = ("권역센터", "지역센터", "지역기관")
 
 
-# --------------------------------------------------------------------------- PDF
 
-def read_pdf(path: str) -> list[dict]:
-    import pdfplumber
+# ----------------------------------------------------------------------------- XLSX
 
-    def norm(cell) -> str:
-        return re.sub(r"\s+", " ", (cell or "").replace("\n", " ")).strip()
+def norm(v) -> str:
+    return re.sub(r"\s+", " ", str(v)).strip() if v is not None else ""
 
-    rows: list[dict] = []
-    with pdfplumber.open(path) as pdf:
-        for page in pdf.pages:
-            for table in page.extract_tables():
-                for raw in table:
-                    cells = [norm(c) for c in raw]
-                    cells += [""] * (9 - len(cells))
-                    kind, name, addr, tel = cells[0], cells[1], cells[2], cells[3]
-                    if kind in SKIP_ROWS or not name or not addr:
-                        continue
-                    rows.append({"kind": kind, "name": name, "address": addr,
-                                 "tel": tel, "hours": cells[4:8], "note": cells[8]})
-    if not rows:
-        raise SystemExit("PDF 에서 표를 찾지 못했습니다. 배포본 양식이 바뀌었는지 확인하세요.")
+
+def read_sheet(ws, gu: str) -> tuple[list[dict], dict[str, list[int]]]:
+    """한 구 시트에서 기관 행과 소계 행을 뽑는다."""
+    header = next((r for r in range(1, 12)
+                   if norm(ws.cell(r, 1).value) == "구분" and norm(ws.cell(r, 2).value) == "명칭"), None)
+    if header is None:
+        raise SystemExit(f"[{gu}] 헤더 행(구분/명칭)을 찾지 못했습니다. 배포본 양식 변경 확인 필요.")
+
+    rows, subtotals = [], {}
+    for r in range(header + 1, ws.max_row + 1):
+        kind, name = norm(ws.cell(r, 1).value), norm(ws.cell(r, 2).value)
+        if not kind and not name:
+            continue
+        if kind.endswith("소계") or kind == "소계":
+            # 소계 행의 명칭 칸은 총 개소, 5~8열은 일자별 개소
+            if name.isdigit():
+                subtotals[f"{kind}@{r}"] = [name] + [norm(ws.cell(r, c).value) for c in range(5, 9)]
+            continue
+        if kind == "구분" or kind.startswith("총 ") or kind.startswith("총계"):
+            continue
+        if kind not in CATEGORY:
+            raise SystemExit(f"[{gu}] r{r} 알 수 없는 구분 {kind!r} — CATEGORY 에 추가하세요.")
+        hours = [norm(ws.cell(r, c).value) for c in range(5, 9)]
+        if not any(hours):
+            raise SystemExit(f"[{gu}] r{r} {name!r} 4일 모두 공란입니다. 양식 확인 필요.")
+        rows.append({"gu": gu, "kind": kind, "name": name,
+                     "address": norm(ws.cell(r, 3).value), "tel": norm(ws.cell(r, 4).value),
+                     "hours": hours})
+    return rows, subtotals
+
+
+def read_xlsx(path: str) -> list[dict]:
+    import openpyxl
+
+    wb = openpyxl.load_workbook(path, data_only=True)
+    missing = [s for s in SHEETS if s not in wb.sheetnames]
+    if missing:
+        raise SystemExit(f"시트 없음: {missing} (있는 시트: {wb.sheetnames})")
+
+    all_rows = []
+    for gu in SHEETS:
+        rows, subtotals = read_sheet(wb[gu], gu)
+        verify(gu, rows, subtotals)
+        all_rows += rows
+    return all_rows
+
+
+def verify(gu: str, rows: list[dict], subtotals: dict[str, list[int]]) -> None:
+    """시트가 스스로 밝힌 소계와 대조. 어긋나면 파싱이 깨진 것이므로 중단한다."""
+    got_ph = [sum(1 for r in rows if r["kind"] in PHARMACY_KINDS and r["hours"][i]) for i in range(4)]
+    got_med = [sum(1 for r in rows if r["kind"] not in PHARMACY_KINDS and r["hours"][i]) for i in range(4)]
+    n_ph = sum(1 for r in rows if r["kind"] in PHARMACY_KINDS)
+    n_med = len(rows) - n_ph
+
+    want_ph = want_med = None
+    for key, vals in subtotals.items():
+        nums = [int(v) for v in vals if str(v).isdigit()]
+        if len(nums) != 5:
+            continue
+        total, per_day = nums[0], nums[1:]
+        if "약국" in key or (want_ph is None and total == n_ph and per_day == got_ph):
+            want_ph = (total, per_day)
+        else:
+            want_med = (total, per_day) if want_med is None else (want_med[0] + total,
+                                                                  [a + b for a, b in zip(want_med[1], per_day)])
+    if want_ph is None or want_med is None:
+        raise SystemExit(f"[{gu}] 소계 행을 해석하지 못했습니다: {subtotals}")
+    if (n_ph, got_ph) != want_ph:
+        raise SystemExit(f"[{gu}] 약국 소계 불일치: 추출 {n_ph}{got_ph} vs 시트 {want_ph}")
+    if (n_med, got_med) != want_med:
+        raise SystemExit(f"[{gu}] 의료기관 소계 불일치: 추출 {n_med}{got_med} vs 시트 {want_med}")
+    print(f"  [{gu}] 소계 검증 통과 — 의료기관 {n_med}{got_med}, 약국 {n_ph}{got_ph}")
+
+
+def tel_with_area(tel: str) -> str:
+    """경기도 시트는 지역번호를 뺀 채로 적혀 있다. 1588 같은 전국대표번호는 그대로 둔다."""
+    t = norm(tel).replace(" ", "")
+    if not t or t.startswith("0") or re.match(r"^1\d{3}-", t):
+        return t
+    return f"031-{t}"
+
+
+def read_er_sheet(wb) -> list[dict]:
+    """경기도 응급의료기관 — 권역구분명으로 나눈 24시간 응급실."""
+    ws = wb[ER_SHEET]
+    header = next((r for r in range(1, 6) if norm(ws.cell(r, 1).value) == "시군명"), None)
+    if header is None:
+        raise SystemExit(f"[{ER_SHEET}] 헤더(시군명)를 찾지 못했습니다.")
+    rows = []
+    for r in range(header + 1, ws.max_row + 1):
+        sigun, name = norm(ws.cell(r, 1).value), norm(ws.cell(r, 2).value)
+        tier, addr = norm(ws.cell(r, 3).value), norm(ws.cell(r, 6).value)
+        if not name:
+            continue
+        if tier not in ER_TIERS:
+            raise SystemExit(f"[{ER_SHEET}] r{r} 알 수 없는 권역구분명 {tier!r}")
+        rows.append({"set": "er", "gu": sigun, "cat": tier, "kind": tier, "name": name,
+                     "address": addr, "tel": tel_with_area(ws.cell(r, 4).value),
+                     "erTel": tel_with_area(ws.cell(r, 5).value)})
+    print(f"  [{ER_SHEET}] {len(rows)}건 — " + ", ".join(
+        f"{t} {sum(1 for x in rows if x['cat'] == t)}" for t in ER_TIERS))
     return rows
 
 
-# ----------------------------------------------------------------------- Overpass
+def read_moon_sheet(wb) -> list[dict]:
+    """경기도 달빛어린이병원.
 
-def overpass(query: str):
-    last = None
-    for mirror in OVERPASS_MIRRORS:
-        try:
-            req = urllib.request.Request(
-                mirror, data=urllib.parse.urlencode({"data": query}).encode(),
-                headers={"User-Agent": "anyang-chuseok-map/1.0 (+github.com/jaystarboard)"})
-            with urllib.request.urlopen(req, timeout=240) as res:
-                return json.load(res)
-        except Exception as exc:                      # 미러 과부하는 흔하므로 순차 폴백
-            last = exc
-            print(f"  overpass 실패 {mirror}: {exc}", file=sys.stderr)
-            time.sleep(4)
-    raise SystemExit(f"Overpass 모든 미러 실패: {last}")
-
-
-def osm_addresses() -> list[dict]:
-    if os.path.exists(CACHE):
-        print("OSM 주소 캐시 사용:", CACHE)
-        return json.load(open(CACHE, encoding="utf-8"))
-    s, w, n, e = BBOX
-    data = overpass(f'[out:json][timeout:180];'
-                    f'nwr["addr:housenumber"]["addr:street"]({s},{w},{n},{e});out center tags;')
-    points = []
-    for el in data["elements"]:
-        tags = el.get("tags", {})
-        centre = el.get("center") or ({"lat": el["lat"], "lon": el["lon"]} if "lat" in el else None)
-        if not centre:
+    한 기관이 보통 2행(평일 / 토·일·공휴일)에 걸쳐 있지만 한 줄만 있는 곳도 있어
+    행 위치가 아니라 `(평일)` / `(토/일/공)` 접두어로 분류한다.
+    추석 연휴 9.24~9.27 은 전부 공휴일·일요일이므로 화면에 쓰는 값은 휴일 쪽이다.
+    """
+    ws = wb[MOON_SHEET]
+    rows = []
+    for r in range(1, ws.max_row + 1):
+        if not isinstance(ws.cell(r, 1).value, (int, float)):
             continue
-        points.append({"street": tags["addr:street"], "hn": tags["addr:housenumber"],
-                       "lat": centre["lat"], "lon": centre["lon"]})
-    json.dump(points, open(CACHE, "w", encoding="utf-8"), ensure_ascii=False)
-    print(f"OSM 주소점 {len(points)}건 수집 -> {CACHE}")
-    return points
+        name = norm(ws.cell(r, 3).value)
+        if not name:
+            continue
+        weekday = holiday = ""
+        for rr in (r, r + 1):
+            if rr > ws.max_row or (rr != r and isinstance(ws.cell(rr, 1).value, (int, float))):
+                continue
+            line = norm(ws.cell(rr, 6).value)
+            if not line:
+                continue
+            head = line.split(")")[0]
+            if "평" in head:
+                weekday = line
+            elif any(k in head for k in ("토", "일", "공")):
+                holiday = line
+        rows.append({"set": "moon", "gu": norm(ws.cell(r, 2).value), "cat": "달빛",
+                     "kind": "달빛어린이병원", "name": name, "address": "", "tel": "",
+                     "partner": norm(ws.cell(r, 4).value),
+                     "weekday": weekday, "holiday": holiday})
+    no_holiday = [x["name"] for x in rows if not x["holiday"]]
+    print(f"  [{MOON_SHEET}] {len(rows)}건" +
+          (f" — 휴일시간 미표기 {len(no_holiday)}건: {', '.join(no_holiday)}" if no_holiday else ""))
+    return rows
 
 
-# ---------------------------------------------------------------------- geocoding
+# ------------------------------------------------------------------------- 좌표
 
-def parse_road(address: str) -> tuple[str | None, str | None]:
-    """도로명주소에서 (도로명, 건물번호) 추출. '관평로 170번길' 처럼 띄어 쓴 표기도 흡수한다."""
-    a = re.sub(r"\s+", " ", address).strip()
-    if "동안구" not in a:
-        return None, None
-    a = re.sub(r"(로|길)\s+(\d+번길)", r"\1\2", a)
-    m = (re.search(r"동안구\s+(\S*?(?:로|길)\d*번?길?)\s+(\d+(?:-\d+)?)", a)
-         or re.search(r"동안구\s+(\S+?[로길])\s+(\d+(?:-\d+)?)", a))
-    return (m.group(1), m.group(2)) if m else (None, None)
+def load_coords() -> dict:
+    """tools/geocode.html (카카오 addressSearch) 로 만든 좌표표.
+
+    카카오 JS 키는 도메인 제한이 있어 등록된 도메인에서만 동작하므로 런타임 지오코딩 대신
+    한 번 만들어 둔 결과를 쓴다. 명단이 바뀌면 addresses.json 을 다시 뽑아 하네스를 돌린다.
+    """
+    if not os.path.exists(COORDS):
+        raise SystemExit(f"{COORDS} 가 없습니다. tools/geocode.html 을 등록된 도메인에서 실행해 만드세요.")
+    raw = json.load(open(COORDS, encoding="utf-8"))
+    return {k: v for k, v in raw.items() if not k.startswith("_")}
 
 
-def geocode(rows: list[dict], osm: list[dict]) -> None:
-    exact = defaultdict(list)
-    by_street = defaultdict(list)
-    for p in osm:
-        exact[(p["street"], p["hn"])].append(p)
-        head = re.match(r"^(\d+)", str(p["hn"]))
-        if head:
-            by_street[p["street"]].append((int(head.group(1)), p))
-    for v in by_street.values():
-        v.sort(key=lambda x: x[0])
+def coord_key(r: dict) -> str:
+    """안양시 명단은 구 기준, 경기도 레이어는 접두어로 구분한다(안양샘병원처럼 양쪽에 나오는 곳이 있다)."""
+    prefix = r.get("set", "anyang")
+    return f"{r['gu']}|{r['name']}" if prefix == "anyang" else f"{prefix}|{r['gu']}|{r['name']}"
 
-    def centroid(cands):
-        lat = statistics.median(c["lat"] for c in cands)
-        lon = statistics.median(c["lon"] for c in cands)
-        best = min(cands, key=lambda c: (c["lat"] - lat) ** 2 + (c["lon"] - lon) ** 2)
-        return best["lat"], best["lon"]
 
-    def interpolate(street, n):
-        arr = by_street.get(street)
-        if not arr:
-            return None
-        same = [x for x in arr if x[0] % 2 == n % 2] or arr   # 홀/짝은 도로의 반대편
-        lo = [x for x in same if x[0] <= n]
-        hi = [x for x in same if x[0] >= n]
-        if lo and hi and lo[-1][0] != hi[0][0]:
-            a, b = lo[-1], hi[0]
-            t = (n - a[0]) / (b[0] - a[0])
-            return (a[1]["lat"] + (b[1]["lat"] - a[1]["lat"]) * t,
-                    a[1]["lon"] + (b[1]["lon"] - a[1]["lon"]) * t)
-        near = lo[-1] if lo else hi[0]
-        return near[1]["lat"], near[1]["lon"]
-
+def attach_coords(rows: list[dict]) -> None:
+    coords = load_coords()
+    missing = [coord_key(r) for r in rows if coord_key(r) not in coords]
+    if missing:
+        raise SystemExit("좌표표에 없는 기관:\n  " + "\n  ".join(missing)
+                         + "\n-> python tools/make_addresses.py 후 tools/geocode.html 을 실행하세요.")
     for r in rows:
-        street, hn = parse_road(r["address"])
-        if not street:
-            raise SystemExit(f"주소 파싱 실패: {r['name']} / {r['address']}")
-        n = int(re.match(r"^(\d+)", hn).group(1))
-
-        if r["name"] in MANUAL_FIX:
-            r["lat"], r["lon"], why = MANUAL_FIX[r["name"]]
-            r["acc"], r["acc_src"] = "approx", why
-        elif (street, hn) in exact:
-            r["lat"], r["lon"] = centroid(exact[(street, hn)])
-            r["acc"], r["acc_src"] = "exact", "OSM 건물 주소 정확 일치"
-        else:
-            point = interpolate(street, n)
-            if not point:
-                raise SystemExit(f"좌표 추정 실패: {r['name']} / {street} {hn}")
-            gap = min(abs(n - h) for h, _ in by_street[street])
-            r["lat"], r["lon"] = point
-            r["acc"] = "approx"
-            r["acc_src"] = f"도로명 번호 보간 (최근접 기준번지 Δ{gap})"
-            if gap > 25:
-                print(f"  ⚠ 보간 간격 큼 (Δ{gap}) — MANUAL_FIX 검토 필요: {r['name']} / {street} {hn}")
+        r["lat"], r["lon"] = coords[coord_key(r)]
 
 
-# -------------------------------------------------------------------------- build
-
-def verify(rows: list[dict]) -> None:
-    """PDF 소계와 대조. 어긋나면 파싱이 깨진 것이므로 빌드를 중단한다."""
-    expect_med = [44 + 1, 15 + 1, 29 + 1, 21 + 1]      # 병의원소계 + 응급실
-    expect_ph = [44, 13, 30, 31]
-    for i, day in enumerate(DAYS):
-        med = sum(1 for r in rows if CATEGORY[r["kind"]] != "약국" and r["hours"][i])
-        ph = sum(1 for r in rows if CATEGORY[r["kind"]] == "약국" and r["hours"][i])
-        if (med, ph) != (expect_med[i], expect_ph[i]):
-            raise SystemExit(f"소계 불일치 {day['label']}: 의료기관 {med}(기대 {expect_med[i]}), "
-                             f"약국 {ph}(기대 {expect_ph[i]})")
-    print("PDF 소계 검증 통과")
-
+# ---------------------------------------------------------------------------- build
 
 def main() -> None:
     if len(sys.argv) < 2:
         raise SystemExit(__doc__)
-    rows = read_pdf(sys.argv[1])
-    print(f"PDF 추출 {len(rows)}건")
-    verify(rows)
-    geocode(rows, osm_addresses())
+    import openpyxl
+    wb = openpyxl.load_workbook(sys.argv[1], data_only=True)
+
+    anyang = []
+    for gu in SHEETS:
+        rows, subtotals = read_sheet(wb[gu], gu)
+        verify(gu, rows, subtotals)
+        for r in rows:
+            r["set"] = "anyang"
+        anyang += rows
+    er = read_er_sheet(wb)
+    moon = read_moon_sheet(wb)
+
+    attach_coords(anyang + er + moon)
+
+    def cat_of(r):
+        return "응급실" if ALWAYS_OPEN in r["hours"] else CATEGORY[r["kind"]]
 
     facilities = []
-    ordered = sorted(rows, key=lambda r: (r["kind"] != "권역응급의료센터", r["kind"], r["name"]))
-    for i, r in enumerate(ordered, start=1):
-        facilities.append({
-            "id": i, "cat": CATEGORY[r["kind"]], "kind": r["kind"], "name": r["name"],
-            "addr": re.sub(r"\s+", " ", r["address"]).strip(), "tel": r["tel"],
-            "hours": r["hours"], "note": r["note"],
-            "lat": round(r["lat"], 6), "lon": round(r["lon"], 6),
-            "acc": r["acc"], "accSrc": r["acc_src"],
-        })
+    for i, r in enumerate(sorted(anyang, key=lambda x: (cat_of(x) != "응급실", x["gu"], cat_of(x), x["name"])), 1):
+        facilities.append({"id": i, "gu": r["gu"], "cat": cat_of(r), "kind": r["kind"], "name": r["name"],
+                           "addr": r["address"], "tel": r["tel"], "hours": r["hours"],
+                           "lat": r["lat"], "lon": r["lon"]})
+
+    er_out = []
+    for i, r in enumerate(sorted(er, key=lambda x: (ER_TIERS.index(x["cat"]), x["gu"], x["name"])), 1):
+        er_out.append({"id": 1000 + i, "gu": r["gu"], "cat": r["cat"], "kind": r["cat"], "name": r["name"],
+                       "addr": r["address"], "tel": r["tel"], "erTel": r["erTel"],
+                       "lat": r["lat"], "lon": r["lon"]})
+
+    moon_out = []
+    for i, r in enumerate(sorted(moon, key=lambda x: (x["gu"], x["name"])), 1):
+        moon_out.append({"id": 2000 + i, "gu": r["gu"], "cat": "달빛", "kind": "달빛어린이병원",
+                         "name": r["name"], "addr": "", "tel": "", "partner": r["partner"],
+                         "weekday": r["weekday"], "holiday": r["holiday"],
+                         "lat": r["lat"], "lon": r["lon"]})
 
     doc = {
         "meta": {
-            "title": "2026 추석 연휴 문여는 병원·약국 (안양시 동안구)",
-            "source": "안양시 동안구보건소 「2026년 추석 연휴 문여는 의료기관 및 약국 현황(동안구)」",
-            "sourceAsOf": "2026-09-17",
+            "title": "2026 추석 연휴 문여는 병원·약국 (안양시 전체)",
+            "source": "안양시보건소 「2026년 추석 연휴 문여는 의료기관 및 약국 현황」 (동안구·만안구)",
+            "sourceUrl": "https://www.anyang.go.kr/health/selectBbsNttView.do?key=1369&bbsNo=108&nttNo=458257",
+            "sourceAsOf": "2026-09-18",
+            "geocoder": "카카오 로컬 주소검색·장소검색 (tools/geocode.html)",
             "contacts": [
                 {"label": "응급의료포털 E-Gen", "url": "https://www.e-gen.or.kr"},
                 {"label": "보건복지부 콜센터", "tel": "129"},
                 {"label": "구급상황관리센터", "tel": "119"},
+                {"label": "만안구보건소", "tel": "031-8045-3472"},
                 {"label": "동안구보건소", "tel": "031-8045-4472"},
             ],
             "disclaimer": "기관 사정으로 운영시간이 변동될 수 있으니 방문 전 반드시 전화 확인하세요.",
             "days": DAYS,
+            "layers": {
+                "er": {"label": "경기 응급의료", "note": "24시간 운영. 권역구분명(권역센터·지역센터·지역기관) 기준.",
+                       "tiers": list(ER_TIERS)},
+                "moon": {"label": "달빛어린이병원",
+                         "note": "야간·휴일 소아 진료. 9.24~9.27 은 모두 공휴일이라 (토/일/공) 시간이 적용됩니다."},
+            },
         },
         "facilities": facilities,
+        "er": er_out,
+        "moon": moon_out,
     }
     json.dump(doc, open(OUT, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
-    print(f"{len(facilities)}건 -> {OUT}")
-    print("분류:", dict(Counter(f['cat'] for f in facilities)),
-          "| 좌표 정확도:", dict(Counter(f['acc'] for f in facilities)))
+
+    print(f"\n안양시 {len(facilities)} / 경기응급 {len(er_out)} / 달빛 {len(moon_out)} -> {OUT}")
+    print("  안양 구:", dict(Counter(f["gu"] for f in facilities)))
+    print("  안양 분류:", dict(Counter(f["cat"] for f in facilities)))
+    print("  응급 권역구분:", dict(Counter(f["cat"] for f in er_out)))
+    for i, d in enumerate(DAYS):
+        print(f"  {d['label']}({d['dow']}) 안양 문여는 곳 {sum(1 for f in facilities if f['hours'][i])}곳")
 
 
 if __name__ == "__main__":
