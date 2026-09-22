@@ -507,16 +507,17 @@
     if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
   }
 
+  function locateOff() {
+    stopWatch();
+    state.origin = null;
+    clearMeDot();
+    $("#btn-locate").classList.remove("on");
+    if (state.sheetMode === "list") renderSheetList();
+  }
+
   function locate() {
     const btn = $("#btn-locate");
-    if (state.origin) {
-      stopWatch();
-      state.origin = null;
-      clearMeDot();
-      btn.classList.remove("on");
-      if (state.sheetMode === "list") renderSheetList();
-      return;
-    }
+    if (state.origin) { locateOff(); return; }
     if (!navigator.geolocation) { alert("이 브라우저는 위치 기능을 지원하지 않습니다."); return; }
 
     btn.disabled = true;
@@ -562,6 +563,7 @@
     });
     document.body.dataset.engine = engine.name;
     engine.on("click", closeDetail);
+    engine.on("userpan", () => { if (state.origin) locateOff(); });
     engine.on("idle", () => {
       clearTimeout(idleTimer);
       idleTimer = setTimeout(renderPins, 90);

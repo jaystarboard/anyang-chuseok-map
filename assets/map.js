@@ -46,7 +46,7 @@ window.MapEngine = (() => {
       label: "카카오맵",
       raw: map,
       on(evt, cb) {
-        const name = { click: "click", idle: "idle" }[evt];
+        const name = { click: "click", idle: "idle", userpan: "dragend" }[evt];
         if (name) kakao.maps.event.addListener(map, name, cb);
       },
       relayout() { map.relayout(); },
@@ -112,6 +112,8 @@ window.MapEngine = (() => {
           map.on("click", (e) => { if (!e.dragging) cb(); });
         } else if (evt === "idle") {
           map.on("moveend", cb);
+        } else if (evt === "userpan") {
+          map.on("pointerdrag", cb);
         }
       },
       relayout() { map.updateSize(); },
