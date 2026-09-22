@@ -90,7 +90,7 @@
   const kakaoLink = (f) =>
     "https://map.kakao.com/?q=" + encodeURIComponent(f.addr ? roadOnly(f.addr) : `${f.gu} ${f.name}`);
 
-  let engine, pinHandles = [], meHandle = null, popHandle = null, idleTimer = null, watchId = null;
+  let engine, pinHandles = [], meHandle = null, meEl = null, popHandle = null, idleTimer = null, watchId = null;
 
   function buildGroups(list) {
     const byPos = new Map();
@@ -190,6 +190,7 @@
         pinHandles.push(engine.addOverlay(el, [c.lat, c.lon], { yAnchor: 0.5, zIndex: 40 }));
       }
     }
+    placeMeDot();
     markSelection();
   }
 
@@ -455,11 +456,22 @@
   }
 
   function placeMeDot() {
-    if (meHandle) { engine.moveOverlay(meHandle, state.origin); return; }
-    const dot = document.createElement("div");
-    dot.className = "medot";
-    meHandle = engine.addOverlay(dot, engine.getCenter(), { yAnchor: 0.5, xAnchor: 0.5, zIndex: 20 });
+    if (!state.origin) return;
+    if (meHandle && meEl && meEl.isConnected) {
+      engine.moveOverlay(meHandle, state.origin);
+      return;
+    }
+    if (meHandle) engine.removeOverlay(meHandle);
+    meEl = document.createElement("div");
+    meEl.className = "medot";
+    meHandle = engine.addOverlay(meEl, engine.getCenter(), { yAnchor: 0.5, xAnchor: 0.5, zIndex: 20 });
     engine.moveOverlay(meHandle, state.origin);
+  }
+
+  function clearMeDot() {
+    if (meHandle) engine.removeOverlay(meHandle);
+    meHandle = null;
+    meEl = null;
   }
 
   function stopWatch() {
@@ -471,7 +483,7 @@
     if (state.origin) {
       stopWatch();
       state.origin = null;
-      if (meHandle) { engine.removeOverlay(meHandle); meHandle = null; }
+      clearMeDot();
       btn.classList.remove("on");
       if (state.sheetMode === "list") renderSheetList();
       return;
@@ -510,7 +522,7 @@
       pinHandles.forEach((h) => engine.removeOverlay(h));
       pinHandles = [];
       closePopup();
-      if (meHandle) { engine.removeOverlay(meHandle); meHandle = null; }
+      clearMeDot();
       engine.destroy();
     }
 
