@@ -156,32 +156,6 @@ body[data-engine="osm"] .bar__engine {
 }
 .ov--top > * { pointer-events: auto; }
 
-.search {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 0 10px;
-  height: 36px;
-  background: var(--surface);
-  border: 1px solid var(--border-strong);
-  border-radius: 9px;
-  box-shadow: var(--shadow-m);
-  color: var(--text-faint);
-}
-.search input {
-  flex: 1; min-width: 0;
-  border: 0; background: none; outline: none;
-  font: inherit; font-size: 13.5px; color: var(--text);
-  padding: 0;
-}
-.search input::-webkit-search-cancel-button { display: none; }
-.search button {
-  flex: none; width: 22px; height: 22px; display: grid; place-items: center;
-  border: 0; border-radius: 50%; background: var(--surface-2); color: var(--text-dim); cursor: pointer;
-}
-.search button svg { width: 13px; height: 13px; stroke-width: 2.4; }
-
 .chips { display: flex; flex-wrap: wrap; gap: 4px; width: 100%; padding: 1px; }
 .chip {
   flex: none;
@@ -574,10 +548,7 @@ body[data-engine="osm"] .bar__engine {
   .chips { gap: 3px; }
   .chip { height: 24px; padding: 0 6px; font-size: 11px; gap: 3px; }
   .chip i { width: 5px; height: 5px; }
-  .search { height: 34px; }
-  .search input { font-size: 13px; }
-}
-
+  
 @media (min-width: 761px) {
   .sheet {
     left: 10px; right: auto; bottom: 14px;
@@ -593,12 +564,12 @@ body[data-engine="osm"] .bar__engine {
   .bar h1 { font-size: 16px; }
 }
 
-.bar__info, .day, .search button, .chip, .fab, .fabzoom button,
+.bar__info, .day, .chip, .fab, .fabzoom button,
 .sheet__close, .sheet__back, .acts a, .copy, .rows button, .dlg menu button, .pop__close {
   transition: transform .09s ease, background-color .12s ease, box-shadow .12s ease;
 }
 
-.bar__info:active, .search button:active, .copy:active,
+.bar__info:active, .copy:active,
 .sheet__close:active, .pop__close:active {
   transform: scale(.88);
   background: var(--surface-2);

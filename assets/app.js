@@ -37,7 +37,6 @@
     all: [],
     dayIndex: 0,
     cat: ALL,
-    query: "",
     origin: null,
     visible: [],
     groups: [],
@@ -263,13 +262,7 @@
   }
 
   function apply() {
-    const q = state.query.trim().toLowerCase();
-    state.visible = state.all.filter((f) =>
-      inScope(f) &&
-      opensOn(f, state.dayIndex) &&
-      (!q || f.name.toLowerCase().includes(q) || (f.addr || "").toLowerCase().includes(q) ||
-        f.gu.includes(q) || f.kind.includes(q))
-    );
+    state.visible = state.all.filter((f) => inScope(f) && opensOn(f, state.dayIndex));
     state.groups = buildGroups(state.visible);
 
     if (state.selected) {
@@ -645,19 +638,6 @@
     renderDays();
     apply();
 
-    let t;
-    $("#search").addEventListener("input", (e) => {
-      $("#search-clear").hidden = !e.target.value;
-      clearTimeout(t);
-      t = setTimeout(() => { state.query = e.target.value; apply(); }, 140);
-    });
-    $("#search-clear").addEventListener("click", () => {
-      $("#search").value = "";
-      $("#search-clear").hidden = true;
-      state.query = "";
-      apply();
-      $("#search").focus();
-    });
     $("#btn-list").addEventListener("click", () =>
       (state.sheetMode === "list" ? closeDetail() : renderSheetList()));
     $("#btn-zoom-in").addEventListener("click", () => nudgeZoom(1));
