@@ -217,9 +217,9 @@
         el.title = g.items.map((f) => f.name).join(" · ");
         el.setAttribute("aria-label", g.items.map((f) => f.name).join(", "));
         el.innerHTML = esc(meta.ch) + (g.items.length > 1 ? `<sup>${g.items.length}</sup>` : "");
-        el.addEventListener("click", (e) => { e.stopPropagation(); selectGroup(g); });
+        bindTap(el, () => selectGroup(g));
         g.el = el;
-        g.ov = engine.addOverlay(el, [g.lat, g.lon], { zIndex: baseZ(g) });
+        g.ov = engine.addOverlay(el, [g.lat, g.lon], { zIndex: baseZ(g), clickable: false });
         pinHandles.push(g.ov);
       } else {
         const total = c.groups.reduce((s, g) => s + g.items.length, 0);
@@ -232,12 +232,10 @@
         el.textContent = total;
         el.setAttribute("aria-label", `이 부근 ${total}곳, 눌러서 확대`);
         el.title = `이 부근 ${total}곳`;
-        el.addEventListener("click", (e) => {
-          e.stopPropagation();
-          // 묶인 곳들이 한눈에 들어오게 그 범위로 맞춘다. 위쪽은 검색·필터가 덮으므로 더 띄운다.
+        bindTap(el, () => {
           engine.fitBounds(c.groups.map((g) => [g.lat, g.lon]), [96, 56, 64, 56], CLUSTER_MAX_ZOOM + 2);
         });
-        pinHandles.push(engine.addOverlay(el, [c.lat, c.lon], { yAnchor: 0.5, zIndex: 40 }));
+        pinHandles.push(engine.addOverlay(el, [c.lat, c.lon], { yAnchor: 0.5, zIndex: 40, clickable: false }));
       }
     }
     placeMeDot();
@@ -246,6 +244,30 @@
   }
 
   const baseZ = (g) => 100 - PRIORITY.get(g.head.cat);
+
+  /**
+   * 마커 오버레이는 이벤트를 통과시켜(clickable:false) 그 위에서도 지도를 끌 수 있게 해 뒀다.
+   * 대신 끌고 나서 손을 떼는 것까지 클릭으로 잡히므로, 움직인 거리로 탭과 드래그를 가른다.
+   */
+  function bindTap(el, run) {
+    let sx = 0, sy = 0, moved = false;
+    const down = (e) => {
+      const p = e.touches ? e.touches[0] : e;
+      sx = p.clientX; sy = p.clientY; moved = false;
+    };
+    const move = (e) => {
+      const p = e.touches ? e.touches[0] : e;
+      if (Math.hypot(p.clientX - sx, p.clientY - sy) > 6) moved = true;
+    };
+    el.addEventListener("mousedown", down);
+    el.addEventListener("touchstart", down, { passive: true });
+    el.addEventListener("mousemove", move);
+    el.addEventListener("touchmove", move, { passive: true });
+    el.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (!moved) run();
+    });
+  }
 
   function markSelection() {
     for (const g of state.groups) {
@@ -517,7 +539,7 @@
     if (meHandle) engine.removeOverlay(meHandle);
     meEl = document.createElement("div");
     meEl.className = "medot";
-    meHandle = engine.addOverlay(meEl, engine.getCenter(), { yAnchor: 0.5, xAnchor: 0.5, zIndex: 20 });
+    meHandle = engine.addOverlay(meEl, engine.getCenter(), { yAnchor: 0.5, xAnchor: 0.5, zIndex: 20, clickable: false });
     engine.moveOverlay(meHandle, state.origin);
   }
 

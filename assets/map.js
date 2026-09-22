@@ -70,7 +70,7 @@ window.MapEngine = (() => {
         const ov = new kakao.maps.CustomOverlay({
           position: ll(pos), content: element,
           yAnchor: o.yAnchor ?? 1, xAnchor: o.xAnchor ?? 0.5,
-          clickable: true, zIndex: o.zIndex ?? 1,
+          clickable: o.clickable ?? true, zIndex: o.zIndex ?? 1,
         });
         ov.setMap(map);
         return ov;
@@ -146,7 +146,7 @@ window.MapEngine = (() => {
         const h = (o.xAnchor ?? 0.5) >= 1 ? "right" : (o.xAnchor ?? 0.5) <= 0 ? "left" : "center";
         const ov = new ol.Overlay({
           element, position: coord(pos), positioning: `${v}-${h}`,
-          stopEvent: true, className: "ol-overlay-plain",
+          stopEvent: o.clickable ?? true, className: "ol-overlay-plain",
         });
         if (o.zIndex) element.style.zIndex = String(o.zIndex);
         map.addOverlay(ov);
