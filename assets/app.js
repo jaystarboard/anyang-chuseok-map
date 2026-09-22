@@ -27,8 +27,9 @@
 
   const ZOOM_MIN = 10, ZOOM_MAX = 19;
   const SELECTED_Z = 200;      // 마커(<=100)보다 위, 팝업(300)보다 아래
-  // 화면상 중심 간 최소 간격(px). 가장 큰 클러스터 원(44px)보다 커야 서로 겹치지 않는다.
-  const CLUSTER_GAP = 50;
+  // 리더 사이의 최소 간격(px). 가장 큰 클러스터 원보다 커야 겹치지 않고,
+  // 작을수록 잘게 쪼개진다. 원 지름(26/30/34)에 여유 6px 를 더한 값.
+  const CLUSTER_GAP = 40;
   const CLUSTER_MAX_ZOOM = 15;
 
   const state = {
