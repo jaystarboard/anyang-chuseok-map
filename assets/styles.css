@@ -477,7 +477,8 @@ body[data-engine="osm"] .bar__engine {
   font-variant-numeric: tabular-nums;
   line-height: 1.3;
 }
-.sched div span { display: block; color: var(--text-faint); font-size: 10.5px; }
+/* 일자를 먼저, 시간을 아래에 둔다. */
+.sched div span { display: block; color: var(--text-faint); font-size: 10.5px; margin-bottom: 1px; }
 .sched div.off { color: var(--text-faint); background: var(--surface-2); }
 .sched div.sel { border-color: var(--accent); background: var(--accent-soft); color: var(--text); font-weight: 600; }
 .sched div.sel span { color: var(--accent); }

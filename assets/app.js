@@ -315,19 +315,19 @@
 
   function schedHtml(f) {
     if (f.set === "er") {
-      return `<div class="sched"><div class="sel">24시간 응급실<span>${esc(f.cat)}</span></div></div>`;
+      return `<div class="sched"><div class="sel"><span>${esc(f.cat)}</span>24시간 응급실</div></div>`;
     }
     if (f.set === "moon") {
       const rows = f.holiday
-        ? [`<div class="sel">${timeHtml(f.holiday.replace(/^\([^)]*\)\s*/, ""))}<span>연휴(토·일·공)</span></div>`]
-        : [`<div class="off">미표기<span>연휴 시간</span></div>`];
-      if (f.weekday) rows.push(`<div class="off">${timeHtml(f.weekday.replace(/^\([^)]*\)\s*/, ""))}<span>평일</span></div>`);
+        ? [`<div class="sel"><span>연휴(토·일·공)</span>${timeHtml(f.holiday.replace(/^\([^)]*\)\s*/, ""))}</div>`]
+        : [`<div class="off"><span>연휴 시간</span>미표기</div>`];
+      if (f.weekday) rows.push(`<div class="off"><span>평일</span>${timeHtml(f.weekday.replace(/^\([^)]*\)\s*/, ""))}</div>`);
       return `<div class="sched">${rows.join("")}</div>`;
     }
     return `<div class="sched">${state.meta.days.map((d, i) => {
       const h = f.hours[i];
       const cls = i === state.dayIndex ? "sel" : (h ? "" : "off");
-      return `<div class="${cls}">${h ? (h === ALWAYS_OPEN ? "24시간" : timeHtml(h)) : "휴무"}<span>${d.label} ${d.dow}</span></div>`;
+      return `<div class="${cls}"><span>${d.label} ${d.dow}</span>${h ? (h === ALWAYS_OPEN ? "24시간" : timeHtml(h)) : "휴무"}</div>`;
     }).join("")}</div>`;
   }
 
