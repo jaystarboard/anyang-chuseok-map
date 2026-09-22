@@ -119,7 +119,11 @@ window.MapEngine = (() => {
       relayout() { map.updateSize(); },
       getZoom() { return view.getZoom(); },
       setZoom(z) { view.animate({ zoom: z, duration: 220 }); },
-      zoomAround(pos, z) { view.animate({ center: coord(pos), zoom: z, duration: 260 }); },
+      zoomAround(pos, z) {
+        const a = coord(pos), c0 = view.getCenter();
+        const k = view.getResolutionForZoom(z) / view.getResolution();
+        view.animate({ center: [a[0] + (c0[0] - a[0]) * k, a[1] + (c0[1] - a[1]) * k], zoom: z, duration: 260 });
+      },
       flyTo(pos, z) { view.animate({ center: coord(pos), zoom: z, duration: 260 }); },
       panTo(pos) { view.animate({ center: coord(pos), duration: 260 }); },
       setCenter(pos) { view.setCenter(coord(pos)); },

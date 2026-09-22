@@ -212,7 +212,7 @@
         el.title = `이 부근 ${total}곳`;
         el.addEventListener("click", (e) => {
           e.stopPropagation();
-          engine.flyTo([c.lat, c.lon], Math.min(CLUSTER_MAX_ZOOM + 1, engine.getZoom() + 2));
+          engine.zoomAround([c.lat, c.lon], Math.min(CLUSTER_MAX_ZOOM + 1, engine.getZoom() + 2));
         });
         pinHandles.push(engine.addOverlay(el, [c.lat, c.lon], { yAnchor: 0.5, zIndex: 40 }));
       }
@@ -331,7 +331,7 @@
       </div>
       <div class="card__addr"><em>${esc(f.gu)}</em> ${esc(shortAddr(f)) || "주소 미표기"}${
         f.addr ? `<button type="button" class="copy" data-copy="${esc(fullAddr(f))}" aria-label="주소 복사" title="주소 복사">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>
         </button>` : ""}${f.partner ? ` · 협약약국 ${esc(f.partner)}` : ""}</div>
       ${schedHtml(f)}
       <div class="acts">

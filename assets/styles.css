@@ -441,10 +441,13 @@ body[data-engine="osm"] .bar__engine {
 .card__addr { font-size: 12.5px; color: var(--text-dim); margin-top: 4px; overflow-wrap: anywhere; }
 .card__addr em { font-style: normal; color: var(--text-faint); }
 .copy {
-  display: inline-grid; place-items: center;
-  width: 20px; height: 20px;
-  margin-left: 4px;
-  vertical-align: -4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px; height: 22px;
+  padding: 0;
+  margin-left: 5px;
+  vertical-align: middle;
   border: 1px solid var(--border);
   border-radius: 5px;
   background: var(--surface);
@@ -452,7 +455,7 @@ body[data-engine="osm"] .bar__engine {
   cursor: pointer;
   position: relative;
 }
-.copy svg { width: 13px; height: 13px; }
+.copy svg { display: block; width: 14px; height: 14px; }
 .copy:hover { background: var(--surface-2); color: var(--text); }
 .copy.is-done { border-color: var(--pharm-ok, #2e7d32); color: #2e7d32; }
 .copy.is-fail { border-color: #c62828; color: #c62828; }
