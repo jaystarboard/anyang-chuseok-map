@@ -22,9 +22,15 @@
     "지역기관": { ch: "기", color: "#d4786a", set: "er" },
     "달빛":     { ch: "달", color: "#b9701c", set: "moon" },
   };
-  const ORDER = Object.keys(CATS);
-  const ANYANG_CATS = ORDER.filter((c) => CATS[c].set === "anyang");
-  const PRIORITY = new Map(ORDER.map((c, i) => [c, i]));   // 묶인 마커의 대표 분류 선정용
+  /** 필터 줄에 항상 먼저 보이는 분류. 나머지는 +N 패널로 접는다. */
+  const PRIMARY = ["응급실", "병원", "의원", "약국"];
+  const ORDER = [...PRIMARY, ...Object.keys(CATS).filter((c) => !PRIMARY.includes(c))];
+  const ANYANG_CATS = Object.keys(CATS).filter((c) => CATS[c].set === "anyang");
+
+  /** 같은 좌표에 묶인 마커의 대표 분류. 급할 때 찾는 쪽이 앞, 약국이 맨 뒤. */
+  const PRIORITY = new Map(
+    ["응급실", "권역센터", "지역센터", "지역기관", "병원", "의원", "치과", "한방", "달빛", "약국"]
+      .map((c, i) => [c, i]));
 
   const state = {
     meta: null,
@@ -232,23 +238,24 @@
   }
 
   /**
-   * 칩이 한 줄에 안 들어가면 넘치는 만큼 패널로 옮기고 +N 버튼을 띄운다.
-   * 폭을 재야 해서 DOM 에 붙인 뒤에 계산한다.
+   * PRIMARY 는 항상 줄에 남기고 나머지는 +N 패널로 접는다.
+   * 화면이 더 좁아 PRIMARY 조차 넘치면 폭을 재서 뒤쪽부터 마저 접는다.
    */
   function layoutChips() {
     const bar = $("#chips"), panel = $("#chips-panel"), more = $("#chips-more");
     while (panel.firstChild) bar.appendChild(panel.firstChild);
 
-    const avail = document.querySelector('.ov--top').clientWidth;
+    const avail = $(".ov--top").clientWidth;
     const kids = [...bar.children];
     const GAP = 5, MORE_W = 58;
-    let used = 0, cut = kids.length;
-    for (let i = 0; i < kids.length; i++) {
-      const w = kids[i].offsetWidth + (i ? GAP : 0);
-      const budget = avail - (i < kids.length - 1 ? MORE_W + GAP : 0);
-      if (used + w > budget) { cut = i; break; }
-      used += w;
+    let cut = kids.filter((k) => PRIMARY.includes(k.dataset.cat)).length;
+
+    let used = 0;
+    for (let i = 0; i < cut; i++) {
+      used += kids[i].offsetWidth + (i ? GAP : 0);
+      if (used > avail - MORE_W - GAP) { cut = i; break; }
     }
+    if (cut < 1) cut = 1;
 
     if (cut >= kids.length) {
       more.hidden = true;
