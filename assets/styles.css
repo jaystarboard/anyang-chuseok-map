@@ -490,6 +490,16 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
   background: var(--accent); color: #fff; font: inherit; font-weight: 600; cursor: pointer;
 }
 
+/* 좁은 화면에서도 응급실·병원·의원·약국 네 개는 줄에 남도록 칩을 조밀하게 만든다. */
+@media (max-width: 560px) {
+  .chipbar, .chips { gap: 4px; }
+  .chip { height: 26px; padding: 0 7px; font-size: 11.5px; gap: 4px; }
+  .chip i { width: 6px; height: 6px; }
+  .chip--more { padding: 0 8px; }
+  .search { height: 34px; }
+  .search input { font-size: 13px; }
+}
+
 /* ───────── 데스크톱: 시트를 지도 위 카드로 ───────── */
 
 @media (min-width: 761px) {

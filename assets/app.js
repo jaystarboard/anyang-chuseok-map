@@ -262,7 +262,8 @@
 
     const avail = $(".ov--top").clientWidth;
     const kids = [...bar.children];
-    const GAP = 5, MORE_W = 58;
+    const GAP = window.innerWidth <= 560 ? 4 : 5;
+    const MORE_W = window.innerWidth <= 560 ? 44 : 58;
     let cut = kids.filter((k) => PRIMARY.includes(k.dataset.cat)).length;
 
     let used = 0;
