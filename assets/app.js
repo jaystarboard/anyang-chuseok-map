@@ -39,8 +39,10 @@
     ["응급실", "권역센터", "지역센터", "지역기관", "병원", "의원", "치과", "한방", "달빛", "약국"]
       .map((c, i) => [c, i]));
 
-  const CLUSTER_CELL = 70;      // px. 이 격자 안에 여러 지점이 겹치면 하나로 묶는다
-  const CLUSTER_MAX_ZOOM = 16;  // 이보다 확대하면 항상 개별 마커로 푼다
+  // 격자가 넓으면 수 km 떨어진 곳까지 한 덩어리로 묶여 대표점이 실제 위치와 멀어진다.
+  const CLUSTER_CELL = 44;      // px. 이 격자 안에 겹치는 지점만 묶는다
+  const CLUSTER_MAX_ZOOM = 15;  // 이보다 확대하면 항상 개별 마커로 푼다
+  const CLUSTER_SPAN_MAX = 46;  // px. 묶인 뒤에도 퍼짐이 이보다 크면 쪼갠다
 
   const state = {
     meta: null,
@@ -141,16 +143,27 @@
       if (!cells.has(key)) cells.set(key, []);
       cells.get(key).push(g);
     }
-    return [...cells.values()].map((groups) => {
+    const out = [];
+    for (const groups of cells.values()) {
       if (groups.length === 1) {
-        return { single: groups[0], groups, lat: groups[0].lat, lon: groups[0].lon };
+        out.push({ single: groups[0], groups, lat: groups[0].lat, lon: groups[0].lon });
+        continue;
       }
-      return {
+      // 격자 모서리에 걸쳐 멀리 떨어진 것끼리 묶였으면 한 덩어리로 보여 주지 않는다
+      const pts = groups.map((g) => engine.project([g.lat, g.lon]));
+      const spanX = Math.max(...pts.map((p) => p.x)) - Math.min(...pts.map((p) => p.x));
+      const spanY = Math.max(...pts.map((p) => p.y)) - Math.min(...pts.map((p) => p.y));
+      if (Math.max(spanX, spanY) > CLUSTER_SPAN_MAX) {
+        groups.forEach((g) => out.push({ single: g, groups: [g], lat: g.lat, lon: g.lon }));
+        continue;
+      }
+      out.push({
         single: null, groups,
         lat: groups.reduce((s, g) => s + g.lat, 0) / groups.length,
         lon: groups.reduce((s, g) => s + g.lon, 0) / groups.length,
-      };
-    });
+      });
+    }
+    return out;
   }
 
   function renderPins() {
@@ -178,7 +191,7 @@
           .sort((a, b) => PRIORITY.get(a) - PRIORITY.get(b))[0];
         const el = document.createElement("button");
         el.type = "button";
-        el.className = "cluster" + (total >= 25 ? " is-lg" : total >= 10 ? " is-md" : "");
+        el.className = "cluster" + (total >= 20 ? " is-lg" : total >= 8 ? " is-md" : "");
         el.style.setProperty("--c", CATS[top].color);
         el.textContent = total;
         el.setAttribute("aria-label", `이 부근 ${total}곳, 눌러서 확대`);
