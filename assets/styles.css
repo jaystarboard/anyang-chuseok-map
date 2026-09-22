@@ -287,6 +287,54 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
   z-index: 10;
 }
 
+/* ───────── PC 미니 팝업 (마커에 붙는 말풍선) ───────── */
+
+.popwrap { padding-bottom: 46px; }          /* 마커 위로 띄운다 */
+.pop {
+  position: relative;
+  width: 296px;
+  max-width: calc(100vw - 32px);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  box-shadow: var(--shadow-m);
+  animation: pop .14s ease;
+}
+@keyframes pop { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+.pop::after {
+  content: "";
+  position: absolute; left: 50%; bottom: -7px;
+  width: 12px; height: 12px;
+  background: var(--surface);
+  border-right: 1px solid var(--border-strong);
+  border-bottom: 1px solid var(--border-strong);
+  transform: translateX(-50%) rotate(45deg);
+}
+.pop__close {
+  position: absolute; top: 6px; right: 6px; z-index: 2;
+  width: 26px; height: 26px;
+  display: grid; place-items: center;
+  border: 0; border-radius: 7px;
+  background: var(--surface); color: var(--text-faint);
+  cursor: pointer;
+}
+.pop__close:hover { background: var(--surface-2); color: var(--text); }
+.pop__close svg { width: 15px; height: 15px; stroke-width: 2.4; }
+.pop__body {
+  max-height: 252px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 10px 13px 12px;
+  scrollbar-width: auto;
+  scrollbar-color: var(--border-strong) transparent;
+}
+.pop__body::-webkit-scrollbar { width: 11px; }
+.pop__body::-webkit-scrollbar-thumb {
+  background: var(--border-strong); border: 3px solid var(--surface); border-radius: 999px;
+}
+.pop__body::-webkit-scrollbar-track { background: transparent; }
+.pop .sheet__head { padding-right: 26px; }
+
 /* ───────── 하단 시트 ───────── */
 
 /* display:flex 가 hidden 속성의 display:none 을 이기므로 명시적으로 눌러 준다. */

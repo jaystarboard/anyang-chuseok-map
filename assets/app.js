@@ -103,7 +103,9 @@
 
   /* ─────────── 지도 ─────────── */
 
-  let map, overlays = [], meOverlay = null;
+  let map, overlays = [], meOverlay = null, popOverlay = null;
+
+  const isDesktop = () => window.innerWidth > 760;
 
   function initMap() {
     map = new kakao.maps.Map($("#map"), {
@@ -205,6 +207,7 @@
     renderChips();
     $("#fab-count").textContent = state.visible.length;
     if (state.sheetMode === "list") renderSheetList();
+    else if (state.selected && isDesktop()) showPopup(state.selected);
   }
 
   /* ─────────── 렌더 ─────────── */
@@ -219,7 +222,7 @@
       state.dayIndex = +b.dataset.i;
       renderDays();
       apply();
-      if (state.sheetMode === "detail" && state.selected) renderSheetDetail(state.selected);
+      if (state.selected && !isDesktop() && state.sheetMode === "detail") renderSheetDetail(state.selected);
     }));
   }
 
@@ -322,6 +325,37 @@
     </article>`;
   }
 
+  /** PC 는 마커에 붙는 말풍선으로 상세를 띄운다 (하단 카드보다 위치가 직관적이다). */
+  function showPopup(g) {
+    closePopup();
+    const wrap = document.createElement("div");
+    wrap.className = "popwrap";
+    wrap.innerHTML = `<div class="pop">
+      <button type="button" class="pop__close" aria-label="닫기">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+      <div class="pop__body">
+        <div class="sheet__head">${g.items.length > 1
+          ? `<b>같은 위치 ${g.items.length}곳</b>` : `<b>${esc(g.head.name)}</b>`}</div>
+        ${g.items.map(cardHtml).join("")}
+      </div></div>`;
+    wrap.querySelector(".pop__close").addEventListener("click", (e) => {
+      e.stopPropagation();
+      state.selected = null;
+      markSelection();
+      closePopup();
+    });
+    popOverlay = new kakao.maps.CustomOverlay({
+      position: new kakao.maps.LatLng(g.lat, g.lon),
+      content: wrap, yAnchor: 1, xAnchor: 0.5, clickable: true, zIndex: 300,
+    });
+    popOverlay.setMap(map);
+  }
+
+  function closePopup() {
+    if (popOverlay) { popOverlay.setMap(null); popOverlay = null; }
+  }
+
   function openSheet() {
     clearTimeout(closeTimer);
     const sheet = $("#sheet");
@@ -332,6 +366,7 @@
   let closeTimer = null;
 
   function closeSheet() {
+    closePopup();
     const sheet = $("#sheet");
     state.sheetMode = null;
     state.selected = null;
@@ -359,6 +394,7 @@
   }
 
   function renderSheetList() {
+    closePopup();
     state.sheetMode = "list";
     state.selected = null;
     markSelection();
@@ -397,9 +433,18 @@
 
   function selectGroup(g, opts = {}) {
     state.selected = g;
-    renderSheetDetail(g);
     markSelection();
-    if (opts.pan) panToWithSheet(g.lat, g.lon);
+    if (isDesktop()) {
+      $("#sheet").hidden = true;
+      state.sheetMode = null;
+      $("#btn-list").classList.remove("on");
+      if (opts.pan) map.panTo(new kakao.maps.LatLng(g.lat, g.lon));
+      showPopup(g);
+    } else {
+      closePopup();
+      renderSheetDetail(g);
+      if (opts.pan) panToWithSheet(g.lat, g.lon);
+    }
   }
 
   function renderInfo() {
