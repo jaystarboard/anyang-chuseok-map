@@ -133,7 +133,9 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 
 .ov { position: absolute; z-index: 20; }
 .ov--top {
-  top: 8px; left: 8px; right: 8px;
+  top: 8px;
+  left: max(8px, env(safe-area-inset-left));
+  right: max(8px, env(safe-area-inset-right));
   max-width: 560px;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -218,7 +220,7 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 /* ───────── 지도 위 버튼 (우측 하단) ───────── */
 
 .ov--fabs {
-  right: 10px;
+  right: max(10px, env(safe-area-inset-right));
   bottom: calc(14px + env(safe-area-inset-bottom));
   display: grid;
   gap: 7px;
@@ -287,6 +289,36 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
   z-index: 10;
 }
 
+/* ───────── 클러스터 ───────── */
+
+.cluster {
+  width: 38px; height: 38px;
+  display: grid; place-items: center;
+  border: 0; border-radius: 50%;
+  background: var(--c);
+  color: #fff;
+  font: inherit; font-size: 13px; font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--c) 26%, transparent),
+              0 3px 10px rgba(21, 52, 41, .3);
+  transition: transform .12s ease;
+}
+.cluster.is-md { width: 46px; height: 46px; font-size: 14px; }
+.cluster.is-lg { width: 54px; height: 54px; font-size: 15px; }
+.cluster:hover { transform: scale(1.1); }
+
+.medot {
+  width: 16px; height: 16px; border-radius: 50%;
+  background: var(--accent); border: 3px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .15), 0 2px 6px rgba(0, 0, 0, .3);
+}
+
+/* OpenLayers 폴백에서도 오버레이가 카카오와 같은 위치·크기로 보이게 한다. */
+.ol-overlay-plain { position: absolute; }
+#map .ol-zoom { top: 54px; left: 10px; }
+#map .ol-attribution { font-size: 10.5px; }
+
 /* ───────── PC 미니 팝업 (마커에 붙는 말풍선) ───────── */
 
 .popwrap { padding-bottom: 46px; }          /* 마커 위로 띄운다 */
@@ -323,6 +355,7 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .pop__body {
   max-height: 252px;
   overflow-y: auto;
+  overflow-x: hidden;
   overscroll-behavior: contain;
   padding: 10px 13px 12px;
   scrollbar-width: auto;
@@ -378,6 +411,7 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   overscroll-behavior: contain;
   padding: 2px 14px 12px;
   scrollbar-width: auto;
@@ -408,7 +442,7 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 /* 카드 = 기관 1곳 */
 .card { padding: 10px 0; border-top: 1px solid var(--border); }
 .card:first-of-type { border-top: 0; }
-.card__top { display: flex; align-items: center; gap: 6px; }
+.card__top { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
 .tag {
   flex: none;
   min-width: 21px; height: 21px; padding: 0 5px;
@@ -417,14 +451,15 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
   background: var(--c); color: #fff;
   font-size: 11.5px; font-weight: 700;
 }
-.card__name { font-size: 15px; font-weight: 700; letter-spacing: -.01em; }
+.card__name { font-size: 15px; font-weight: 700; letter-spacing: -.01em; overflow-wrap: anywhere; min-width: 0; }
 .card__kind { font-size: 11px; color: var(--text-faint); background: var(--surface-2); border-radius: 999px; padding: 1px 7px; }
-.card__addr { font-size: 12.5px; color: var(--text-dim); margin-top: 4px; }
+.card__addr { font-size: 12.5px; color: var(--text-dim); margin-top: 4px; overflow-wrap: anywhere; }
 .card__addr em { font-style: normal; color: var(--text-faint); }
 
-.sched { display: flex; gap: 4px; margin-top: 8px; }
+.sched { display: flex; gap: 4px; margin-top: 8px; min-width: 0; }
 .sched div {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0;
   border: 1px solid var(--border);
   border-radius: 7px;
   padding: 4px 3px;
@@ -439,9 +474,13 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .sched div.sel { border-color: var(--accent); background: var(--accent-soft); color: var(--text); font-weight: 600; }
 .sched div.sel span { color: var(--accent); }
 
-.acts { display: flex; gap: 6px; margin-top: 9px; }
+.acts { display: flex; gap: 6px; margin-top: 9px; min-width: 0; }
 .acts a {
-  flex: 1; text-align: center;
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap; text-align: center;
   padding: 8px 4px;
   border: 1px solid var(--border-strong);
   border-radius: 8px;
@@ -456,8 +495,10 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 /* 목록 모드 */
 .rows { margin: 0; padding: 0; list-style: none; }
 .rows li + li { border-top: 1px solid var(--border); }
+.rows__txt { min-width: 0; overflow: hidden; }
+.rows .nm, .rows .sub { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rows button {
-  width: 100%; display: flex; align-items: center; gap: 8px;
+  width: 100%; display: flex; align-items: center; gap: 8px; min-width: 0;
   border: 0; background: none; font: inherit; color: inherit;
   padding: 9px 2px; text-align: left; cursor: pointer;
 }

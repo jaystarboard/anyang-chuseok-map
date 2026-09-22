@@ -1,54 +1,65 @@
 /**
  * 추석 연휴 문여는 병원·약국 — 안양시 전체
  *
- * 화면은 지도가 거의 전부를 차지하고, 검색·필터·버튼은 지도 위 오버레이로 띄운다.
- * 좌표는 빌드 시점에 카카오 지오코딩으로 구워 두었으므로 런타임 지오코딩은 하지 않는다.
+ * 지도가 화면 대부분을 차지하고 검색·필터·버튼은 지도 위 오버레이로 띄운다.
+ * 좌표는 빌드 시점에 카카오 지오코딩으로 구워 두어 런타임 지오코딩은 하지 않는다.
+ * 지도 엔진(카카오 / OSM)은 assets/map.js 가 골라 주므로 여기서는 신경 쓰지 않는다.
  */
 (() => {
   "use strict";
 
   const ALWAYS_OPEN = "응급실운영";
+  const MAIL = "jaystarboard@gmail.com";
 
-  /** 분류 -> 마커 글자·색. 색만으로는 구분이 어려워 글자를 함께 쓴다. */
+  /**
+   * 분류 -> 마커 글자·색.
+   * 글자는 분류명 앞 글자를 그대로 쓰고, 색은 서로 최대한 멀어지도록 색상환을 갈라 배치했다.
+   * 경기 레이어(권/지/기/달)는 보조 자료라 무채·갈색 계열로 빼서 안양시 6종과 섞이지 않게 했다.
+   */
   const CATS = {
-    "응급실":   { ch: "E", color: "#b52b43", set: "anyang" },
-    "병원":     { ch: "H", color: "#235cb4", set: "anyang" },
-    "의원":     { ch: "＋", color: "#177c8e", set: "anyang" },
-    "치과":     { ch: "치", color: "#af4a83", set: "anyang" },
-    "한방":     { ch: "한", color: "#6c50a3", set: "anyang" },
-    "약국":     { ch: "약", color: "#197344", set: "anyang" },
-    "권역센터": { ch: "권", color: "#7c1327", set: "er" },
-    "지역센터": { ch: "지", color: "#c0453f", set: "er" },
-    "지역기관": { ch: "기", color: "#d4786a", set: "er" },
-    "달빛":     { ch: "달", color: "#b9701c", set: "moon" },
+    "응급실":   { ch: "응", color: "#c62828", set: "anyang" },
+    "병원":     { ch: "병", color: "#1565c0", set: "anyang" },
+    "의원":     { ch: "의", color: "#0f766e", set: "anyang" },
+    "치과":     { ch: "치", color: "#ad1457", set: "anyang" },
+    "한방":     { ch: "한", color: "#6a1b9a", set: "anyang" },
+    "약국":     { ch: "약", color: "#2e7d32", set: "anyang" },
+    "권역센터": { ch: "권", color: "#263238", set: "er" },
+    "지역센터": { ch: "지", color: "#5d4037", set: "er" },
+    "지역기관": { ch: "기", color: "#546e7a", set: "er" },
+    "달빛":     { ch: "달", color: "#a15c00", set: "moon" },
   };
+
   /** 필터 줄에 항상 먼저 보이는 분류. 나머지는 +N 패널로 접는다. */
   const PRIMARY = ["응급실", "병원", "의원", "약국"];
   const ORDER = [...PRIMARY, ...Object.keys(CATS).filter((c) => !PRIMARY.includes(c))];
   const ANYANG_CATS = Object.keys(CATS).filter((c) => CATS[c].set === "anyang");
 
-  /** 같은 좌표에 묶인 마커의 대표 분류. 급할 때 찾는 쪽이 앞, 약국이 맨 뒤. */
+  /** 같은 지점에 묶였을 때 대표로 세울 분류. 급할 때 찾는 쪽이 앞, 약국이 맨 뒤. */
   const PRIORITY = new Map(
     ["응급실", "권역센터", "지역센터", "지역기관", "병원", "의원", "치과", "한방", "달빛", "약국"]
       .map((c, i) => [c, i]));
 
+  const CLUSTER_CELL = 70;      // px. 이 격자 안에 여러 지점이 겹치면 하나로 묶는다
+  const CLUSTER_MAX_ZOOM = 16;  // 이보다 확대하면 항상 개별 마커로 푼다
+
   const state = {
     meta: null,
-    all: [],                 // 세 데이터셋을 하나로 합친 배열
+    all: [],
     dayIndex: 0,
     cats: new Set(ANYANG_CATS),
     query: "",
-    origin: null,            // [lat, lon] — 내 위치
+    origin: null,
     visible: [],
     groups: [],
-    selected: null,          // 선택된 그룹
-    sheetMode: null,         // 'list' | 'detail'
-    chipsOpen: false,        // 넘친 필터 펼침 여부
+    selected: null,
+    sheetMode: null,
+    chipsOpen: false,
   };
 
   const $ = (s) => document.querySelector(s);
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g,
     (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const isDesktop = () => window.innerWidth > 760;
 
   /* ─────────── 시간 ─────────── */
 
@@ -57,21 +68,18 @@
     return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
   };
 
-  /** 해당 날짜에 여는지. 경기 레이어는 날짜와 무관하게 항상 대상이다. */
-  function opensOn(f, dayIndex) {
-    if (f.set !== "anyang") return true;
-    return Boolean(f.hours[dayIndex]);
-  }
+  /** 경기 레이어는 날짜와 무관하게 항상 대상이다. */
+  const opensOn = (f, i) => (f.set !== "anyang" ? true : Boolean(f.hours[i]));
 
-  function hoursText(f, dayIndex) {
+  function hoursText(f, i) {
     if (f.set === "er") return "24시간";
     if (f.set === "moon") return (f.holiday || f.weekday || "").replace(/^\([^)]*\)\s*/, "");
-    const h = f.hours[dayIndex];
+    const h = f.hours[i];
     if (!h) return "휴무";
     return h === ALWAYS_OPEN ? "24시간" : h;
   }
 
-  /* ─────────── 거리 ─────────── */
+  /* ─────────── 주소·거리 ─────────── */
 
   function distanceM(a, b) {
     const R = 6371000, rad = Math.PI / 180;
@@ -103,22 +111,9 @@
 
   /* ─────────── 지도 ─────────── */
 
-  let map, overlays = [], meOverlay = null, popOverlay = null;
+  let engine, pinHandles = [], meHandle = null, popHandle = null, idleTimer = null;
 
-  const isDesktop = () => window.innerWidth > 760;
-
-  function initMap() {
-    map = new kakao.maps.Map($("#map"), {
-      center: new kakao.maps.LatLng(37.3935, 126.9465),
-      level: 6,
-    });
-    kakao.maps.event.addListener(map, "click", closeSheet);
-
-    // 헤더가 얇아 레이아웃이 늦게 잡히면 지도가 0 크기로 굳는다. 크기 변화를 따라간다.
-    new ResizeObserver(() => map.relayout()).observe($("#map"));
-  }
-
-  /** 같은 좌표에 여러 기관이 있으면 흩뿌리지 않고 하나로 묶어 +N 으로 표시한다. */
+  /** 같은 좌표의 기관들을 한 지점으로 묶는다 (흩뿌리면 서로 가려 클릭이 안 된다). */
   function buildGroups(list) {
     const byPos = new Map();
     for (const f of list) {
@@ -134,34 +129,66 @@
     return groups;
   }
 
-  function renderMarkers() {
-    overlays.forEach((o) => o.setMap(null));
-    overlays = [];
-
+  /** 화면 픽셀 격자로 가까운 지점들을 묶는다. 확대할수록 자연히 풀린다. */
+  function clusterGroups() {
+    if (!engine || engine.getZoom() >= CLUSTER_MAX_ZOOM) {
+      return state.groups.map((g) => ({ single: g, groups: [g], lat: g.lat, lon: g.lon }));
+    }
+    const cells = new Map();
     for (const g of state.groups) {
-      const meta = CATS[g.head.cat];
-      const el = document.createElement("button");
-      el.type = "button";
-      el.className = "pin";
-      el.style.setProperty("--c", meta.color);
-      el.title = g.items.map((f) => f.name).join(" · ");
-      el.setAttribute("aria-label", g.items.map((f) => f.name).join(", "));
-      el.innerHTML = esc(meta.ch) + (g.items.length > 1 ? `<sup>${g.items.length}</sup>` : "");
-      // 마커를 누를 때는 지도를 움직이지 않는다 (이미 보고 있는 위치라 흔들리기만 한다).
-      el.addEventListener("click", (e) => { e.stopPropagation(); selectGroup(g, { pan: false }); });
+      const p = engine.project([g.lat, g.lon]);
+      const key = `${Math.floor(p.x / CLUSTER_CELL)},${Math.floor(p.y / CLUSTER_CELL)}`;
+      if (!cells.has(key)) cells.set(key, []);
+      cells.get(key).push(g);
+    }
+    return [...cells.values()].map((groups) => {
+      if (groups.length === 1) {
+        return { single: groups[0], groups, lat: groups[0].lat, lon: groups[0].lon };
+      }
+      return {
+        single: null, groups,
+        lat: groups.reduce((s, g) => s + g.lat, 0) / groups.length,
+        lon: groups.reduce((s, g) => s + g.lon, 0) / groups.length,
+      };
+    });
+  }
 
-      const ov = new kakao.maps.CustomOverlay({
-        position: new kakao.maps.LatLng(g.lat, g.lon),
-        content: el,
-        yAnchor: 1,
-        xAnchor: 0.5,
-        clickable: true,
-        // 응급실처럼 급할 때 찾는 분류가 약국 더미에 묻히지 않도록 우선순위를 z 로 준다
-        zIndex: 100 - PRIORITY.get(g.head.cat),
-      });
-      ov.setMap(map);
-      g.el = el;
-      overlays.push(ov);
+  function renderPins() {
+    pinHandles.forEach((h) => engine.removeOverlay(h));
+    pinHandles = [];
+    state.groups.forEach((g) => { g.el = null; });
+
+    for (const c of clusterGroups()) {
+      if (c.single) {
+        const g = c.single, meta = CATS[g.head.cat];
+        const el = document.createElement("button");
+        el.type = "button";
+        el.className = "pin";
+        el.style.setProperty("--c", meta.color);
+        el.title = g.items.map((f) => f.name).join(" · ");
+        el.setAttribute("aria-label", g.items.map((f) => f.name).join(", "));
+        el.innerHTML = esc(meta.ch) + (g.items.length > 1 ? `<sup>${g.items.length}</sup>` : "");
+        el.addEventListener("click", (e) => { e.stopPropagation(); selectGroup(g); });
+        g.el = el;
+        pinHandles.push(engine.addOverlay(el, [g.lat, g.lon],
+          { zIndex: 100 - PRIORITY.get(g.head.cat) }));
+      } else {
+        const total = c.groups.reduce((s, g) => s + g.items.length, 0);
+        const top = c.groups.map((g) => g.head.cat)
+          .sort((a, b) => PRIORITY.get(a) - PRIORITY.get(b))[0];
+        const el = document.createElement("button");
+        el.type = "button";
+        el.className = "cluster" + (total >= 25 ? " is-lg" : total >= 10 ? " is-md" : "");
+        el.style.setProperty("--c", CATS[top].color);
+        el.textContent = total;
+        el.setAttribute("aria-label", `이 부근 ${total}곳, 눌러서 확대`);
+        el.title = `이 부근 ${total}곳`;
+        el.addEventListener("click", (e) => {
+          e.stopPropagation();
+          engine.zoomAround([c.lat, c.lon], Math.min(CLUSTER_MAX_ZOOM + 1, engine.getZoom() + 2));
+        });
+        pinHandles.push(engine.addOverlay(el, [c.lat, c.lon], { yAnchor: 0.5, zIndex: 40 }));
+      }
     }
     markSelection();
   }
@@ -174,16 +201,14 @@
 
   /** 모바일에선 시트가 아래를 덮으므로 그만큼 지도를 밀어 마커가 가리지 않게 한다. */
   function panToWithSheet(lat, lon) {
-    const pos = new kakao.maps.LatLng(lat, lon);
-    map.panTo(pos);
+    engine.panTo([lat, lon]);
     setTimeout(() => {
       const sheet = $("#sheet");
-      if (sheet.hidden || window.innerWidth > 760) return;
+      if (sheet.hidden || isDesktop()) return;
       const shift = sheet.getBoundingClientRect().height / 2;
-      const proj = map.getProjection();
-      const pt = proj.containerPointFromCoords(pos);
-      map.panTo(proj.coordsFromContainerPoint(new kakao.maps.Point(pt.x, pt.y + shift)));
-    }, 240);
+      const pt = engine.project([lat, lon]);
+      engine.panTo(engine.unproject({ x: pt.x, y: pt.y + shift }));
+    }, 260);
   }
 
   /* ─────────── 필터 ─────────── */
@@ -201,9 +226,9 @@
     if (state.selected) {
       const again = state.groups.find((g) => g.key === state.selected.key);
       state.selected = again || null;
-      if (!again && state.sheetMode === "detail") closeSheet();
+      if (!again) closeDetail();
     }
-    renderMarkers();
+    renderPins();
     renderChips();
     $("#fab-count").textContent = state.visible.length;
     if (state.sheetMode === "list") renderSheetList();
@@ -262,8 +287,8 @@
 
     const avail = $(".ov--top").clientWidth;
     const kids = [...bar.children];
-    const GAP = window.innerWidth <= 560 ? 4 : 5;
-    const MORE_W = window.innerWidth <= 560 ? 44 : 58;
+    const narrow = window.innerWidth <= 560;
+    const GAP = narrow ? 4 : 5, MORE_W = narrow ? 44 : 58;
     let cut = kids.filter((k) => PRIMARY.includes(k.dataset.cat)).length;
 
     let used = 0;
@@ -291,12 +316,12 @@
 
   function schedHtml(f) {
     if (f.set === "er") {
-      return `<div class="sched"><div class="sel">24시간 응급실 운영<span>${esc(f.cat)}</span></div></div>`;
+      return `<div class="sched"><div class="sel">24시간 응급실<span>${esc(f.cat)}</span></div></div>`;
     }
     if (f.set === "moon") {
-      const rows = [];
-      if (f.holiday) rows.push(`<div class="sel">${esc(f.holiday.replace(/^\([^)]*\)\s*/, ""))}<span>연휴(토·일·공)</span></div>`);
-      else rows.push(`<div class="off">미표기<span>연휴 시간</span></div>`);
+      const rows = f.holiday
+        ? [`<div class="sel">${esc(f.holiday.replace(/^\([^)]*\)\s*/, ""))}<span>연휴(토·일·공)</span></div>`]
+        : [`<div class="off">미표기<span>연휴 시간</span></div>`];
       if (f.weekday) rows.push(`<div class="off">${esc(f.weekday.replace(/^\([^)]*\)\s*/, ""))}<span>평일</span></div>`);
       return `<div class="sched">${rows.join("")}</div>`;
     }
@@ -326,36 +351,38 @@
     </article>`;
   }
 
-  /** PC 는 마커에 붙는 말풍선으로 상세를 띄운다 (하단 카드보다 위치가 직관적이다). */
+  const headHtml = (g, withList) =>
+    `<div class="sheet__head">${g.items.length > 1
+      ? `<b>같은 위치 ${g.items.length}곳</b>` : `<b>${esc(g.head.name)}</b>`}${
+      withList ? `<button type="button" class="sheet__back" id="to-list">목록</button>` : ""}</div>`;
+
+  /* ─────────── PC 미니 팝업 ─────────── */
+
   function showPopup(g) {
     closePopup();
     const wrap = document.createElement("div");
     wrap.className = "popwrap";
     wrap.innerHTML = `<div class="pop">
       <button type="button" class="pop__close" aria-label="닫기">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
       </button>
-      <div class="pop__body">
-        <div class="sheet__head">${g.items.length > 1
-          ? `<b>같은 위치 ${g.items.length}곳</b>` : `<b>${esc(g.head.name)}</b>`}</div>
-        ${g.items.map(cardHtml).join("")}
-      </div></div>`;
+      <div class="pop__body">${headHtml(g, false)}${g.items.map(cardHtml).join("")}</div></div>`;
     wrap.querySelector(".pop__close").addEventListener("click", (e) => {
       e.stopPropagation();
       state.selected = null;
       markSelection();
       closePopup();
     });
-    popOverlay = new kakao.maps.CustomOverlay({
-      position: new kakao.maps.LatLng(g.lat, g.lon),
-      content: wrap, yAnchor: 1, xAnchor: 0.5, clickable: true, zIndex: 300,
-    });
-    popOverlay.setMap(map);
+    popHandle = engine.addOverlay(wrap, [g.lat, g.lon], { yAnchor: 1, xAnchor: 0.5, zIndex: 300 });
   }
 
   function closePopup() {
-    if (popOverlay) { popOverlay.setMap(null); popOverlay = null; }
+    if (popHandle) { engine.removeOverlay(popHandle); popHandle = null; }
   }
+
+  /* ─────────── 모바일 하단 시트 ─────────── */
+
+  let closeTimer = null;
 
   function openSheet() {
     clearTimeout(closeTimer);
@@ -364,17 +391,9 @@
     sheet.hidden = false;
   }
 
-  let closeTimer = null;
-
-  function closeSheet() {
-    closePopup();
+  function hideSheet() {
     const sheet = $("#sheet");
-    state.sheetMode = null;
-    state.selected = null;
-    $("#btn-list").classList.remove("on");
-    markSelection();
     if (sheet.hidden) return;
-    // 아래로 내려가는 느낌을 주고 나서 감춘다
     sheet.classList.add("is-closing");
     clearTimeout(closeTimer);
     closeTimer = setTimeout(() => {
@@ -383,13 +402,19 @@
     }, 190);
   }
 
+  /** 지도 빈 곳 클릭·ESC — 팝업과 시트를 모두 닫는다. */
+  function closeDetail() {
+    closePopup();
+    hideSheet();
+    state.sheetMode = null;
+    state.selected = null;
+    $("#btn-list").classList.remove("on");
+    markSelection();
+  }
+
   function renderSheetDetail(g) {
     state.sheetMode = "detail";
-    const many = g.items.length > 1;
-    $("#sheet-body").innerHTML =
-      `<div class="sheet__head">${many ? `<b>같은 위치 ${g.items.length}곳</b>` : `<b>${esc(g.head.name)}</b>`}
-        <button type="button" class="sheet__back" id="to-list">목록</button></div>` +
-      g.items.map(cardHtml).join("");
+    $("#sheet-body").innerHTML = headHtml(g, true) + g.items.map(cardHtml).join("");
     $("#to-list").addEventListener("click", renderSheetList);
     openSheet();
   }
@@ -415,7 +440,7 @@
             const m = CATS[f.cat];
             return `<li><button type="button" data-id="${f.id}">
               <span class="tag" style="--c:${m.color}">${esc(m.ch)}</span>
-              <span><span class="nm">${esc(f.name)}</span><br>
+              <span class="rows__txt"><span class="nm">${esc(f.name)}</span><br>
                 <span class="sub">${esc(f.gu)} · ${esc(f.kind)}</span></span>
               <span class="${state.origin ? "dist" : "hr"}">${
                 state.origin ? fmtDist(f._d) : esc(hoursText(f, state.dayIndex))}</span>
@@ -436,10 +461,10 @@
     state.selected = g;
     markSelection();
     if (isDesktop()) {
-      $("#sheet").hidden = true;
+      hideSheet();
       state.sheetMode = null;
       $("#btn-list").classList.remove("on");
-      if (opts.pan) map.panTo(new kakao.maps.LatLng(g.lat, g.lon));
+      if (opts.pan) engine.panTo([g.lat, g.lon]);
       showPopup(g);
     } else {
       closePopup();
@@ -448,8 +473,11 @@
     }
   }
 
+  /* ─────────── 안내 ─────────── */
+
   function renderInfo() {
     const m = state.meta;
+    const osm = engine.name === "osm";
     $("#info-body").innerHTML = `
       <p><strong>${esc(m.disclaimer)}</strong></p>
       <p>출처: ${esc(m.source)} · ${esc(m.sourceAsOf)} 기준 ·
@@ -457,10 +485,14 @@
       <p><b>경기 응급의료기관</b>(권역센터·지역센터·지역기관)은 24시간 운영이라 날짜 탭과 무관합니다.
          <b>달빛어린이병원</b>은 야간·휴일 소아 진료 기관으로, 9.24~9.27 은 모두 공휴일이라
          (토/일/공) 운영시간이 적용됩니다.</p>
+      <p>현재 지도: <b>${esc(engine.label)}</b>.
+         ${osm
+           ? "카카오맵을 쓸 수 없어 OpenStreetMap 으로 자동 전환된 상태입니다."
+           : "카카오 무료 쿼터를 모두 쓰면 자동으로 OpenStreetMap 지도로 전환됩니다."}</p>
       <ul>${m.contacts.map((c) => c.url
         ? `<li>${esc(c.label)} — <a href="${c.url}" target="_blank" rel="noopener">${c.url.replace(/^https?:\/\//, "")}</a></li>`
         : `<li>${esc(c.label)} — <a href="tel:${c.tel.replace(/[^0-9]/g, "")}">${esc(c.tel)}</a></li>`).join("")}</ul>
-      <p>좌표는 카카오 지오코딩으로 만들었고 지도는 카카오맵을 씁니다.</p>`;
+      <p>오류 제보·문의: <a href="mailto:${MAIL}">${MAIL}</a></p>`;
   }
 
   /* ─────────── 내 위치 ─────────── */
@@ -469,7 +501,7 @@
     const btn = $("#btn-locate");
     if (state.origin) {
       state.origin = null;
-      if (meOverlay) { meOverlay.setMap(null); meOverlay = null; }
+      if (meHandle) { engine.removeOverlay(meHandle); meHandle = null; }
       btn.classList.remove("on");
       if (state.sheetMode === "list") renderSheetList();
       return;
@@ -481,17 +513,11 @@
         btn.disabled = false;
         state.origin = [pos.coords.latitude, pos.coords.longitude];
         const dot = document.createElement("div");
-        dot.style.cssText = "width:16px;height:16px;border-radius:50%;background:#1a6fd4;" +
-          "border:3px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.15),0 2px 6px rgba(0,0,0,.3)";
-        if (meOverlay) meOverlay.setMap(null);
-        meOverlay = new kakao.maps.CustomOverlay({
-          position: new kakao.maps.LatLng(state.origin[0], state.origin[1]),
-          content: dot, yAnchor: 0.5, xAnchor: 0.5,
-        });
-        meOverlay.setMap(map);
+        dot.className = "medot";
+        if (meHandle) engine.removeOverlay(meHandle);
+        meHandle = engine.addOverlay(dot, state.origin, { yAnchor: 0.5, xAnchor: 0.5, zIndex: 20 });
         btn.classList.add("on");
-        map.setLevel(4);
-        map.panTo(new kakao.maps.LatLng(state.origin[0], state.origin[1]));
+        engine.zoomAround(state.origin, 16);
         if (state.sheetMode === "list") renderSheetList();
       },
       () => { btn.disabled = false; alert("위치를 가져오지 못했습니다. 브라우저 위치 권한을 확인해 주세요."); },
@@ -505,14 +531,6 @@
     const today = localISO(new Date());
     const i = state.meta.days.findIndex((d) => d.date === today);
     state.dayIndex = i >= 0 ? i : (today < state.meta.days[0].date ? 0 : state.meta.days.length - 1);
-  }
-
-  function fitToAnyang() {
-    const pts = state.all.filter((f) => f.set === "anyang");
-    if (!pts.length) return;
-    const b = new kakao.maps.LatLngBounds();
-    for (const f of pts) b.extend(new kakao.maps.LatLng(f.lat, f.lon));
-    map.setBounds(b, 26, 26, 26, 26);
   }
 
   async function boot() {
@@ -533,10 +551,18 @@
       ...doc.er.map((f) => ({ ...f, set: "er" })),
       ...doc.moon.map((f) => ({ ...f, set: "moon" })),
     ];
-
     pickDefaultDay();
-    initMap();
-    fitToAnyang();
+
+    engine = await MapEngine.create($("#map"), { center: [37.3935, 126.9465], zoom: 13 });
+    document.body.dataset.engine = engine.name;
+    engine.on("click", closeDetail);
+    engine.on("idle", () => {           // 확대/이동하면 클러스터를 다시 묶는다
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(renderPins, 90);
+    });
+    new ResizeObserver(() => engine.relayout()).observe($("#map"));
+    engine.fitBounds(state.all.filter((f) => f.set === "anyang").map((f) => [f.lat, f.lon]));
+
     renderDays();
     renderInfo();
     apply();
@@ -568,18 +594,12 @@
     new ResizeObserver(() => layoutChips()).observe($(".ov--top"));
 
     $("#btn-list").addEventListener("click", () =>
-      (state.sheetMode === "list" ? closeSheet() : renderSheetList()));
+      (state.sheetMode === "list" ? closeDetail() : renderSheetList()));
     $("#btn-locate").addEventListener("click", locate);
-    $("#sheet-close").addEventListener("click", closeSheet);
+    $("#sheet-close").addEventListener("click", closeDetail);
     $("#btn-info").addEventListener("click", () => $("#info").showModal());
-    document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeSheet(); });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDetail(); });
   }
 
-  if (!window.kakao || !window.kakao.maps) {
-    document.body.insertAdjacentHTML("beforeend",
-      `<p style="padding:20px;font-size:14px">카카오맵을 불러오지 못했습니다.
-       이 도메인이 카카오 개발자 콘솔의 웹 플랫폼에 등록되어 있는지 확인해 주세요.</p>`);
-  } else {
-    kakao.maps.load(boot);
-  }
+  boot();
 })();
