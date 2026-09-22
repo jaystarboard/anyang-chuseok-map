@@ -27,6 +27,7 @@
 
   const ZOOM_MIN = 10, ZOOM_MAX = 19;
   const SELECTED_Z = 200;      // 마커(<=100)보다 위, 팝업(300)보다 아래
+  const HOVER_Z = 250;         // 가리켜 보는 동안은 선택된 것보다도 앞으로
   // 리더 사이의 최소 간격(px). 가장 큰 클러스터 원보다 커야 겹치지 않고,
   // 작을수록 잘게 쪼개진다. 원 지름(26/30/34)에 여유 6px 를 더한 값.
   const CLUSTER_GAP = 40;
@@ -197,6 +198,7 @@
         bindTap(el, () => selectGroup(g));
         g.el = el;
         g.ov = engine.addOverlay(el, [g.lat, g.lon], { zIndex: baseZ(g), clickable: false });
+        bindHoverZ(el, () => g.ov, () => (isSelected(g) ? SELECTED_Z : baseZ(g)));
         pinHandles.push(g.ov);
       } else {
         const total = c.groups.reduce((s, g) => s + g.items.length, 0);
@@ -212,7 +214,9 @@
         bindTap(el, () => {
           engine.fitBounds(c.groups.map((g) => [g.lat, g.lon]), [96, 56, 64, 56], CLUSTER_MAX_ZOOM + 2);
         });
-        pinHandles.push(engine.addOverlay(el, [c.lat, c.lon], { yAnchor: 0.5, zIndex: 40, clickable: false }));
+        const ov = engine.addOverlay(el, [c.lat, c.lon], { yAnchor: 0.5, zIndex: 40, clickable: false });
+        bindHoverZ(el, () => ov, () => 40);
+        pinHandles.push(ov);
       }
     }
     placeMeDot();
@@ -221,6 +225,13 @@
   }
 
   const baseZ = (g) => 100 - PRIORITY.get(g.head.cat);
+  const isSelected = (g) => Boolean(state.selected) && g.key === state.selected.key;
+
+  /** CSS z-index 는 오버레이 래퍼 안쪽이라 소용없다. 가리키는 동안 오버레이 자체를 올린다. */
+  function bindHoverZ(el, getOv, restZ) {
+    el.addEventListener("mouseenter", () => engine.setOverlayZ(getOv(), HOVER_Z));
+    el.addEventListener("mouseleave", () => engine.setOverlayZ(getOv(), restZ()));
+  }
 
   /**
    * 마커 오버레이는 이벤트를 통과시켜(clickable:false) 그 위에서도 지도를 끌 수 있게 해 뒀다.
@@ -249,7 +260,7 @@
   function markSelection() {
     for (const g of state.groups) {
       if (!g.el) continue;
-      const on = Boolean(state.selected) && g.key === state.selected.key;
+      const on = isSelected(g);
       g.el.classList.toggle("is-on", on);
       // CSS z-index 는 오버레이 래퍼 안쪽이라 소용없다. 오버레이 자체를 올려야 가려지지 않는다.
       if (g.ov) engine.setOverlayZ(g.ov, on ? SELECTED_Z : baseZ(g));
