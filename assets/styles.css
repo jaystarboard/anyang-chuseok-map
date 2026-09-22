@@ -134,6 +134,7 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .ov { position: absolute; z-index: 20; }
 .ov--top {
   top: 8px; left: 8px; right: 8px;
+  max-width: 560px;
   display: grid;
   gap: 6px;
   justify-items: start;
@@ -167,15 +168,24 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 }
 .search button svg { width: 13px; height: 13px; stroke-width: 2.4; }
 
-.chips {
+/* 칩이 한 줄을 넘치면 가로 스크롤 대신 +N 으로 접고, 누르면 아래 패널에 펼친다. */
+.chipbar { display: flex; gap: 5px; width: 100%; padding: 1px; }
+.chips { display: flex; gap: 5px; overflow: hidden; flex: 0 1 auto; min-width: 0; }
+.chips-panel {
   display: flex;
+  flex-wrap: wrap;
   gap: 5px;
-  max-width: 100%;
-  overflow-x: auto;
-  scrollbar-width: none;
-  padding: 1px;
+  width: min(340px, 100%);
+  padding: 7px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 11px;
+  box-shadow: var(--shadow-m);
 }
-.chips::-webkit-scrollbar { display: none; }
+.chips-panel[hidden] { display: none; }
+.chip--more { flex: none; padding: 0 11px; font-weight: 700; }
+.chip--more[aria-expanded="true"] { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.chip--more.has-on { border-color: var(--accent); color: var(--accent); }
 .chip {
   flex: none;
   display: inline-flex;

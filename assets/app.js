@@ -37,6 +37,7 @@
     groups: [],
     selected: null,          // 선택된 그룹
     sheetMode: null,         // 'list' | 'detail'
+    chipsOpen: false,        // 넘친 필터 펼침 여부
   };
 
   const $ = (s) => document.querySelector(s);
@@ -126,7 +127,8 @@
       el.title = g.items.map((f) => f.name).join(" · ");
       el.setAttribute("aria-label", g.items.map((f) => f.name).join(", "));
       el.innerHTML = esc(meta.ch) + (g.items.length > 1 ? `<sup>${g.items.length}</sup>` : "");
-      el.addEventListener("click", (e) => { e.stopPropagation(); selectGroup(g, { pan: true }); });
+      // 마커를 누를 때는 지도를 움직이지 않는다 (이미 보고 있는 위치라 흔들리기만 한다).
+      el.addEventListener("click", (e) => { e.stopPropagation(); selectGroup(g, { pan: false }); });
 
       const ov = new kakao.maps.CustomOverlay({
         position: new kakao.maps.LatLng(g.lat, g.lon),
@@ -204,16 +206,62 @@
   function renderChips() {
     const counts = new Map();
     for (const f of state.all) if (opensOn(f, state.dayIndex)) counts.set(f.cat, (counts.get(f.cat) || 0) + 1);
-    $("#chips").innerHTML = ORDER.filter((c) => counts.get(c)).map((c) => {
+    const bar = $("#chips");
+    bar.innerHTML = "";
+    $("#chips-panel").innerHTML = "";
+
+    for (const c of ORDER) {
+      if (!counts.get(c)) continue;
       const m = CATS[c];
-      return `<button type="button" class="chip" data-cat="${c}" style="--c:${m.color}"
-        aria-pressed="${state.cats.has(c)}"><i></i>${c}<b>${counts.get(c)}</b></button>`;
-    }).join("");
-    $("#chips").querySelectorAll(".chip").forEach((b) => b.addEventListener("click", () => {
-      const c = b.dataset.cat;
-      if (state.cats.has(c)) state.cats.delete(c); else state.cats.add(c);
-      apply();
-    }));
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "chip";
+      b.dataset.cat = c;
+      b.style.setProperty("--c", m.color);
+      b.setAttribute("aria-pressed", String(state.cats.has(c)));
+      b.innerHTML = `<i></i>${esc(c)}<b>${counts.get(c)}</b>`;
+      b.addEventListener("click", () => {
+        if (state.cats.has(c)) state.cats.delete(c); else state.cats.add(c);
+        apply();
+      });
+      bar.appendChild(b);
+    }
+    layoutChips();
+  }
+
+  /**
+   * 칩이 한 줄에 안 들어가면 넘치는 만큼 패널로 옮기고 +N 버튼을 띄운다.
+   * 폭을 재야 해서 DOM 에 붙인 뒤에 계산한다.
+   */
+  function layoutChips() {
+    const bar = $("#chips"), panel = $("#chips-panel"), more = $("#chips-more");
+    while (panel.firstChild) bar.appendChild(panel.firstChild);
+
+    const avail = bar.parentElement.clientWidth;
+    const kids = [...bar.children];
+    const GAP = 5, MORE_W = 58;
+    let used = 0, cut = kids.length;
+    for (let i = 0; i < kids.length; i++) {
+      const w = kids[i].offsetWidth + (i ? GAP : 0);
+      const budget = avail - (i < kids.length - 1 ? MORE_W + GAP : 0);
+      if (used + w > budget) { cut = i; break; }
+      used += w;
+    }
+
+    if (cut >= kids.length) {
+      more.hidden = true;
+      panel.hidden = true;
+      state.chipsOpen = false;
+      more.setAttribute("aria-expanded", "false");
+      return;
+    }
+    kids.slice(cut).forEach((k) => panel.appendChild(k));
+    const onCount = kids.slice(cut).filter((k) => k.getAttribute("aria-pressed") === "true").length;
+    more.hidden = false;
+    more.innerHTML = `+${kids.length - cut}` + (onCount ? `<b>${onCount}</b>` : "");
+    more.classList.toggle("has-on", onCount > 0);
+    more.setAttribute("aria-expanded", String(state.chipsOpen));
+    panel.hidden = !state.chipsOpen;
   }
 
   function schedHtml(f) {
@@ -424,6 +472,19 @@
       apply();
       $("#search").focus();
     });
+    $("#chips-more").addEventListener("click", (e) => {
+      e.stopPropagation();
+      state.chipsOpen = !state.chipsOpen;
+      layoutChips();
+    });
+    document.addEventListener("click", (e) => {
+      if (!state.chipsOpen) return;
+      if (e.target.closest("#chips-panel") || e.target.closest("#chips-more")) return;
+      state.chipsOpen = false;
+      layoutChips();
+    });
+    new ResizeObserver(() => layoutChips()).observe($(".ov--top"));
+
     $("#btn-list").addEventListener("click", () =>
       (state.sheetMode === "list" ? closeSheet() : renderSheetList()));
     $("#btn-locate").addEventListener("click", locate);
