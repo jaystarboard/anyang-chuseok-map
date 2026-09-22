@@ -303,14 +303,29 @@
     </article>`;
   }
 
-  function openSheet() { $("#sheet").hidden = false; }
+  function openSheet() {
+    clearTimeout(closeTimer);
+    const sheet = $("#sheet");
+    sheet.classList.remove("is-closing");
+    sheet.hidden = false;
+  }
+
+  let closeTimer = null;
 
   function closeSheet() {
-    $("#sheet").hidden = true;
+    const sheet = $("#sheet");
     state.sheetMode = null;
     state.selected = null;
     $("#btn-list").classList.remove("on");
     markSelection();
+    if (sheet.hidden) return;
+    // 아래로 내려가는 느낌을 주고 나서 감춘다
+    sheet.classList.add("is-closing");
+    clearTimeout(closeTimer);
+    closeTimer = setTimeout(() => {
+      sheet.classList.remove("is-closing");
+      sheet.hidden = true;
+    }, 190);
   }
 
   function renderSheetDetail(g) {

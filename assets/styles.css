@@ -292,11 +292,13 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 /* display:flex 가 hidden 속성의 display:none 을 이기므로 명시적으로 눌러 준다. */
 .sheet[hidden] { display: none; }
 
+/* 여러 곳이 묶인 경우에도 시트가 화면을 잡아먹지 않게 높이를 고정하고 안에서 스크롤한다.
+   대략 한 곳 분량(카드 1개)이 보이는 높이. */
 .sheet {
   position: absolute;
   z-index: 30;
   left: 0; right: 0; bottom: 0;
-  max-height: 62%;
+  height: 234px;
   display: flex;
   flex-direction: column;
   background: var(--surface);
@@ -307,20 +309,40 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
   animation: rise .22s cubic-bezier(.2, .8, .3, 1);
 }
 @keyframes rise { from { transform: translateY(100%); } to { transform: none; } }
+.sheet.is-closing { animation: drop .2s cubic-bezier(.4, 0, .8, .4) forwards; }
+@keyframes drop { to { transform: translateY(100%); } }
 
-.sheet__grip {
+.sheet__close {
   flex: none;
   align-self: center;
-  width: 44px; height: 20px;
-  margin: 5px 0 1px;
-  border: 0; background: none; cursor: pointer;
-  position: relative;
+  width: 54px; height: 22px;
+  margin: 4px 0 0;
+  display: grid; place-items: center;
+  border: 0; border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text-dim);
+  cursor: pointer;
 }
-.sheet__grip::before {
-  content: ""; position: absolute; inset: 8px 0 auto;
-  height: 4px; border-radius: 2px; background: var(--border-strong);
+.sheet__close svg { width: 20px; height: 20px; stroke-width: 2.4; }
+.sheet__close:hover { background: var(--border); color: var(--text); }
+
+.sheet__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 2px 14px 12px;
+  scrollbar-width: auto;
+  scrollbar-color: var(--border-strong) transparent;
 }
-.sheet__body { overflow-y: auto; overscroll-behavior: contain; padding: 2px 14px 14px; }
+.sheet__body::-webkit-scrollbar { width: 11px; }
+.sheet__body::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border: 3px solid var(--surface);
+  border-radius: 999px;
+}
+.sheet__body::-webkit-scrollbar-thumb:hover { background: var(--text-faint); }
+.sheet__body::-webkit-scrollbar-track { background: transparent; }
 
 .sheet__head {
   display: flex; align-items: center; gap: 7px;
@@ -425,15 +447,14 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 @media (min-width: 761px) {
   .sheet {
     left: 10px; right: auto; bottom: 14px;
-    width: 340px;
-    max-height: calc(100% - 118px);
+    width: 348px;
+    height: 250px;
     border: 1px solid var(--border-strong);
     border-radius: 12px;
     box-shadow: var(--shadow-m);
     animation: fade .16s ease;
   }
   @keyframes fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-  .sheet__grip { width: 52px; }
   .bar { height: var(--bar-h); padding: 0 14px; }
   .bar h1 { font-size: 16px; }
 }
