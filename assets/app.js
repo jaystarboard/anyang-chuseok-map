@@ -43,6 +43,7 @@
   const CLUSTER_CELL = 44;      // px. 이 격자 안에 겹치는 지점만 묶는다
   const CLUSTER_MAX_ZOOM = 15;  // 이보다 확대하면 항상 개별 마커로 푼다
   const CLUSTER_SPAN_MAX = 46;  // px. 묶인 뒤에도 퍼짐이 이보다 크면 쪼갠다
+  const GRID_LAT = 37.39;       // 격자 경도 스케일 기준 위도 (안양 부근)
 
   const state = {
     meta: null,
@@ -133,18 +134,38 @@
     return groups;
   }
 
-  /** 화면 픽셀 격자로 가까운 지점들을 묶는다. 확대할수록 자연히 풀린다. */
+  /** 화면 1px 이 지도상 몇 m 인지 엔진에서 실측한다 (줌에만 의존, 패닝과 무관). */
+  function metersPerPixel() {
+    const c = engine.getCenter();
+    const p = engine.project(c);
+    const a = engine.unproject({ x: p.x, y: p.y });
+    const b = engine.unproject({ x: p.x + 64, y: p.y });
+    return distanceM(a, b) / 64;
+  }
+
+  /**
+   * 가까운 지점들을 묶는다. 확대할수록 자연히 풀린다.
+   *
+   * 격자는 반드시 **지도 좌표**에 고정해야 한다. 화면 픽셀로 격자를 만들면 패닝할 때마다
+   * 격자선이 데이터 위를 미끄러져, 줌이 같은데도 묶임이 계속 바뀐다.
+   * 셀 크기만 현재 줌의 m/px 로 환산해 화면상 크기를 일정하게 유지한다.
+   */
   function clusterGroups() {
     if (!engine || engine.getZoom() >= CLUSTER_MAX_ZOOM) {
       return state.groups.map((g) => ({ single: g, groups: [g], lat: g.lat, lon: g.lon }));
     }
+    const cellM = CLUSTER_CELL * metersPerPixel();
+    const M_LAT = 111320;
+    const M_LON = 111320 * Math.cos(GRID_LAT * Math.PI / 180);   // 기준 위도로 고정해 격자를 균일하게
+
     const cells = new Map();
     for (const g of state.groups) {
-      const p = engine.project([g.lat, g.lon]);
-      const key = `${Math.floor(p.x / CLUSTER_CELL)},${Math.floor(p.y / CLUSTER_CELL)}`;
+      const key = `${Math.floor((g.lon * M_LON) / cellM)},${Math.floor((g.lat * M_LAT) / cellM)}`;
       if (!cells.has(key)) cells.set(key, []);
       cells.get(key).push(g);
     }
+
+    const spanLimitM = CLUSTER_SPAN_MAX * metersPerPixel();
     const out = [];
     for (const groups of cells.values()) {
       if (groups.length === 1) {
@@ -152,10 +173,9 @@
         continue;
       }
       // 격자 모서리에 걸쳐 멀리 떨어진 것끼리 묶였으면 한 덩어리로 보여 주지 않는다
-      const pts = groups.map((g) => engine.project([g.lat, g.lon]));
-      const spanX = Math.max(...pts.map((p) => p.x)) - Math.min(...pts.map((p) => p.x));
-      const spanY = Math.max(...pts.map((p) => p.y)) - Math.min(...pts.map((p) => p.y));
-      if (Math.max(spanX, spanY) > CLUSTER_SPAN_MAX) {
+      const xs = groups.map((g) => g.lon * M_LON), ys = groups.map((g) => g.lat * M_LAT);
+      const span = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
+      if (span > spanLimitM) {
         groups.forEach((g) => out.push({ single: g, groups: [g], lat: g.lat, lon: g.lon }));
         continue;
       }
