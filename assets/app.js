@@ -45,6 +45,17 @@
     sheetMode: null,
   };
 
+  /**
+   * 페이지 자체가 확대/축소되지 않게 막는다. 지도는 자체 제스처를 쓰므로 영향이 없다.
+   * - gesture* : iOS 사파리의 핀치 페이지 줌
+   * - ctrl+wheel : 데스크톱 브라우저 줌
+   * 더블탭 줌은 html/body 의 touch-action: manipulation 이 막는다.
+   */
+  for (const ev of ["gesturestart", "gesturechange", "gestureend"]) {
+    document.addEventListener(ev, (e) => e.preventDefault(), { passive: false });
+  }
+  document.addEventListener("wheel", (e) => { if (e.ctrlKey) e.preventDefault(); }, { passive: false });
+
   const $ = (s) => document.querySelector(s);
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g,
     (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
