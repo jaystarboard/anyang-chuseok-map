@@ -35,10 +35,13 @@ body {
   font-size: 14px;
   line-height: 1.45;
   -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
+
+button, a { touch-action: manipulation; }
 
 svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
 
@@ -588,3 +591,35 @@ body[data-engine="osm"] .bar__engine {
   .bar { height: var(--bar-h); padding: 0 14px; }
   .bar h1 { font-size: 16px; }
 }
+
+.bar__info, .day, .search button, .chip, .fab, .fabzoom button,
+.sheet__close, .sheet__back, .acts a, .copy, .rows button, .dlg menu button, .pop__close {
+  transition: transform .09s ease, background-color .12s ease, box-shadow .12s ease;
+}
+
+.bar__info:active, .search button:active, .copy:active,
+.sheet__close:active, .pop__close:active {
+  transform: scale(.88);
+  background: var(--surface-2);
+}
+
+.fab:active {
+  transform: scale(.9);
+  box-shadow: var(--shadow-s);
+  background: var(--surface-2);
+}
+
+.fabzoom button:active:not(:disabled) {
+  transform: scale(.88);
+  background: var(--border);
+}
+
+.chip:active, .acts a:active, .sheet__back:active, .dlg menu button:active {
+  transform: scale(.95);
+}
+
+.day:active, .rows button:active { background: var(--surface-2); }
+
+.pin:active { transform: scale(1.04); }
+.pin.is-on:active { transform: scale(1.22); }
+.cluster:active { transform: scale(.94); }
