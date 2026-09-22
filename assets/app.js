@@ -87,6 +87,31 @@
     return m ? `${m[1]} ${m[2]}` : a.split(",")[0].trim();
   }
 
+  async function copyText(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch (_) {
+        // 권한 정책으로 막히는 환경이 있어 아래 방식으로 한 번 더 시도한다
+      }
+    }
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.cssText = "position:fixed;top:0;left:0;width:1px;height:1px;opacity:0";
+      document.body.appendChild(ta);
+      ta.select();
+      ta.setSelectionRange(0, text.length);
+      const ok = document.execCommand("copy");
+      ta.remove();
+      return ok;
+    } catch (_) {
+      return false;
+    }
+  }
+
   const fullAddr = (f) => String(f.addr || "").replace(/\s+/g, " ").trim();
 
   const kakaoLink = (f) =>
@@ -603,20 +628,7 @@
       const btn = e.target.closest("[data-copy]");
       if (!btn) return;
       e.stopPropagation();
-      const text = btn.dataset.copy;
-      let ok = true;
-      try {
-        if (navigator.clipboard && window.isSecureContext) await navigator.clipboard.writeText(text);
-        else {
-          const ta = document.createElement("textarea");
-          ta.value = text;
-          ta.style.cssText = "position:fixed;top:-1000px";
-          document.body.appendChild(ta);
-          ta.select();
-          ok = document.execCommand("copy");
-          ta.remove();
-        }
-      } catch (_) { ok = false; }
+      const ok = await copyText(btn.dataset.copy);
       btn.classList.add(ok ? "is-done" : "is-fail");
       setTimeout(() => btn.classList.remove("is-done", "is-fail"), 1200);
     });
