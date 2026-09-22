@@ -27,11 +27,9 @@
 
   const ZOOM_MIN = 10, ZOOM_MAX = 19;
   const SELECTED_Z = 200;      // 마커(<=100)보다 위, 팝업(300)보다 아래
-  const CLUSTER_CELL = 44;
+  // 화면상 중심 간 최소 간격(px). 가장 큰 클러스터 원(44px)보다 커야 서로 겹치지 않는다.
+  const CLUSTER_GAP = 54;
   const CLUSTER_MAX_ZOOM = 15;
-  const CLUSTER_SPAN_MAX = 46;
-  const GRID_LAT = 37.39;
-  const GRID_LAT0 = 37.30, GRID_LON0 = 126.80;
 
   const state = {
     meta: null,
@@ -147,59 +145,43 @@
     return groups;
   }
 
-  function metersPerPixel() {
-    const c = engine.getCenter();
-    const p = engine.project(c);
-    const a = engine.unproject({ x: p.x, y: p.y });
-    const b = engine.unproject({ x: p.x + 64, y: p.y });
-    return distanceM(a, b) / 64;
-  }
-
-  let cellCache = { z: null, m: 0 };
-
-  function cellMeters() {
-    const z = Math.round(engine.getZoom());
-    if (cellCache.z !== z) cellCache = { z, m: CLUSTER_CELL * metersPerPixel() };
-    return cellCache.m;
-  }
-
+  /**
+   * 화면 거리 기준으로 가까운 지점들을 묶는다.
+   *
+   * 격자로 자르면 경계에 걸친 두 셀의 무게중심이 몇 px 까지 붙어 원이 겹친다.
+   * 거리 기준은 그런 경계가 없고, 패닝해도 점들 사이의 상대 거리는 그대로라
+   * 확대/축소할 때만 묶임이 바뀐다(state.groups 순서가 고정이라 결과도 결정적이다).
+   */
   function clusterGroups() {
     if (!engine || engine.getZoom() >= CLUSTER_MAX_ZOOM) {
       return state.groups.map((g) => ({ single: g, groups: [g], lat: g.lat, lon: g.lon }));
     }
-    const cellM = cellMeters();
-    const M_LAT = 111320;
-    const M_LON = 111320 * Math.cos(GRID_LAT * Math.PI / 180);
-    const gx = (g) => ((g.lon - GRID_LON0) * M_LON) / cellM;
-    const gy = (g) => ((g.lat - GRID_LAT0) * M_LAT) / cellM;
 
-    const cells = new Map();
+    const cells = [];
     for (const g of state.groups) {
-      const key = `${Math.floor(gx(g))},${Math.floor(gy(g))}`;
-      if (!cells.has(key)) cells.set(key, []);
-      cells.get(key).push(g);
+      const p = engine.project([g.lat, g.lon]);
+      let host = null;
+      for (const c of cells) {
+        if (Math.hypot(c.x - p.x, c.y - p.y) < CLUSTER_GAP) { host = c; break; }
+      }
+      if (host) {
+        host.groups.push(g);
+        host.sx += p.x; host.sy += p.y;
+        host.x = host.sx / host.groups.length;
+        host.y = host.sy / host.groups.length;
+      } else {
+        cells.push({ groups: [g], x: p.x, y: p.y, sx: p.x, sy: p.y });
+      }
     }
 
-    const spanLimit = CLUSTER_SPAN_MAX / CLUSTER_CELL;
-    const out = [];
-    for (const groups of cells.values()) {
-      if (groups.length === 1) {
-        out.push({ single: groups[0], groups, lat: groups[0].lat, lon: groups[0].lon });
-        continue;
+    return cells.map((c) => {
+      if (c.groups.length === 1) {
+        const g = c.groups[0];
+        return { single: g, groups: c.groups, lat: g.lat, lon: g.lon };
       }
-      const xs = groups.map(gx), ys = groups.map(gy);
-      const span = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
-      if (span > spanLimit) {
-        groups.forEach((g) => out.push({ single: g, groups: [g], lat: g.lat, lon: g.lon }));
-        continue;
-      }
-      out.push({
-        single: null, groups,
-        lat: groups.reduce((s, g) => s + g.lat, 0) / groups.length,
-        lon: groups.reduce((s, g) => s + g.lon, 0) / groups.length,
-      });
-    }
-    return out;
+      const [lat, lon] = engine.unproject({ x: c.x, y: c.y });
+      return { single: null, groups: c.groups, lat, lon };
+    });
   }
 
   function renderPins() {
