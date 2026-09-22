@@ -503,6 +503,35 @@
     );
   }
 
+  async function setEngine(force) {
+    const keep = engine ? { center: engine.getCenter(), zoom: engine.getZoom() } : null;
+    if (engine) {
+      pinHandles.forEach((h) => engine.removeOverlay(h));
+      pinHandles = [];
+      closePopup();
+      if (meHandle) { engine.removeOverlay(meHandle); meHandle = null; }
+      engine.destroy();
+    }
+
+    engine = await MapEngine.create($("#map"), {
+      center: keep ? keep.center : [37.3935, 126.9465],
+      zoom: keep ? keep.zoom : 13,
+      force,
+    });
+    document.body.dataset.engine = engine.name;
+    engine.on("click", closeDetail);
+    engine.on("idle", () => {
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(renderPins, 90);
+    });
+    if (!keep) engine.fitBounds(state.all.filter((f) => f.set === "anyang").map((f) => [f.lat, f.lon]));
+
+    if (state.origin) placeMeDot();
+    renderInfo();
+    renderPins();
+    return engine.name;
+  }
+
   function pickDefaultDay() {
     const today = localISO(new Date());
     const i = state.meta.days.findIndex((d) => d.date === today);
