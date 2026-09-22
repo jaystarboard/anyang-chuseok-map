@@ -372,6 +372,13 @@
       markSelection();
       closePopup();
     });
+
+    // 팝업은 지도 컨테이너 안에 얹히므로 휠·드래그가 지도까지 올라가 줌·패닝이 걸린다.
+    // 전파만 끊고 기본 동작은 두어야 팝업 안에서는 그대로 스크롤된다.
+    for (const ev of ["wheel", "mousewheel", "DOMMouseScroll", "mousedown", "dblclick", "touchmove"]) {
+      wrap.addEventListener(ev, (e) => e.stopPropagation(), { passive: true });
+    }
+
     popHandle = engine.addOverlay(wrap, [g.lat, g.lon], { yAnchor: 1, xAnchor: 0.5, zIndex: 300 });
   }
 
