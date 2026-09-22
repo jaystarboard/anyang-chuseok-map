@@ -29,6 +29,7 @@
   const CLUSTER_MAX_ZOOM = 15;
   const CLUSTER_SPAN_MAX = 46;
   const GRID_LAT = 37.39;
+  const GRID_LAT0 = 37.30, GRID_LON0 = 126.80;
 
   const state = {
     meta: null,
@@ -142,32 +143,41 @@
     return distanceM(a, b) / 64;
   }
 
+  let cellCache = { z: null, m: 0 };
+
+  function cellMeters() {
+    const z = Math.round(engine.getZoom());
+    if (cellCache.z !== z) cellCache = { z, m: CLUSTER_CELL * metersPerPixel() };
+    return cellCache.m;
+  }
+
   function clusterGroups() {
     if (!engine || engine.getZoom() >= CLUSTER_MAX_ZOOM) {
       return state.groups.map((g) => ({ single: g, groups: [g], lat: g.lat, lon: g.lon }));
     }
-    const cellM = CLUSTER_CELL * metersPerPixel();
+    const cellM = cellMeters();
     const M_LAT = 111320;
     const M_LON = 111320 * Math.cos(GRID_LAT * Math.PI / 180);
+    const gx = (g) => ((g.lon - GRID_LON0) * M_LON) / cellM;
+    const gy = (g) => ((g.lat - GRID_LAT0) * M_LAT) / cellM;
 
     const cells = new Map();
     for (const g of state.groups) {
-      const key = `${Math.floor((g.lon * M_LON) / cellM)},${Math.floor((g.lat * M_LAT) / cellM)}`;
+      const key = `${Math.floor(gx(g))},${Math.floor(gy(g))}`;
       if (!cells.has(key)) cells.set(key, []);
       cells.get(key).push(g);
     }
 
-    const spanLimitM = CLUSTER_SPAN_MAX * metersPerPixel();
+    const spanLimit = CLUSTER_SPAN_MAX / CLUSTER_CELL;
     const out = [];
     for (const groups of cells.values()) {
       if (groups.length === 1) {
         out.push({ single: groups[0], groups, lat: groups[0].lat, lon: groups[0].lon });
         continue;
       }
-
-      const xs = groups.map((g) => g.lon * M_LON), ys = groups.map((g) => g.lat * M_LAT);
+      const xs = groups.map(gx), ys = groups.map(gy);
       const span = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
-      if (span > spanLimitM) {
+      if (span > spanLimit) {
         groups.forEach((g) => out.push({ single: g, groups: [g], lat: g.lat, lon: g.lon }));
         continue;
       }
