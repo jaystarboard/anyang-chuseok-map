@@ -229,6 +229,7 @@ body[data-engine="osm"] .bar__engine {
   white-space: nowrap;
 }
 .chip i { width: 7px; height: 7px; border-radius: 50%; background: var(--c); flex: none; }
+.chip--all { --c: var(--accent); }
 .chip b { font-weight: 700; color: var(--text-faint); font-variant-numeric: tabular-nums; }
 .chip:hover { background: var(--surface-2); }
 .chip[aria-pressed="true"] {

@@ -29,10 +29,11 @@
     "달빛":     { ch: "달", color: "#a15c00", set: "moon" },
   };
 
-  /** 필터 줄에 항상 먼저 보이는 분류. 나머지는 +N 패널로 접는다. */
-  const PRIMARY = ["응급실", "병원", "의원", "약국"];
-  const ORDER = [...PRIMARY, ...Object.keys(CATS).filter((c) => !PRIMARY.includes(c))];
-  const ANYANG_CATS = Object.keys(CATS).filter((c) => CATS[c].set === "anyang");
+  /** 필터는 한 번에 하나만 고른다. "전체" 는 안양시 6종 전부. */
+  const ALL = "전체";
+  const CAT_LIST = [ALL, ...Object.keys(CATS)];
+  /** 필터 줄에 항상 보이는 분류. 나머지는 +N 패널로 접는다. */
+  const PRIMARY = [ALL, "응급실", "병원", "의원", "약국"];
 
   /** 같은 지점에 묶였을 때 대표로 세울 분류. 급할 때 찾는 쪽이 앞, 약국이 맨 뒤. */
   const PRIORITY = new Map(
@@ -48,7 +49,7 @@
     meta: null,
     all: [],
     dayIndex: 0,
-    cats: new Set(ANYANG_CATS),
+    cat: ALL,                // 단일 선택 필터
     query: "",
     origin: null,
     visible: [],
@@ -72,6 +73,9 @@
 
   /** 경기 레이어는 날짜와 무관하게 항상 대상이다. */
   const opensOn = (f, i) => (f.set !== "anyang" ? true : Boolean(f.hours[i]));
+
+  /** "전체" 는 안양시 자료만 뜻한다. 경기 레이어는 해당 분류를 직접 골라야 보인다. */
+  const inScope = (f) => (state.cat === ALL ? f.set === "anyang" : f.cat === state.cat);
 
   function hoursText(f, i) {
     if (f.set === "er") return "24시간";
@@ -229,7 +233,7 @@
   function apply() {
     const q = state.query.trim().toLowerCase();
     state.visible = state.all.filter((f) =>
-      state.cats.has(f.cat) &&
+      inScope(f) &&
       opensOn(f, state.dayIndex) &&
       (!q || f.name.toLowerCase().includes(q) || (f.addr || "").toLowerCase().includes(q) ||
         f.gu.includes(q) || f.kind.includes(q))
@@ -266,33 +270,39 @@
 
   function renderChips() {
     const counts = new Map();
-    for (const f of state.all) if (opensOn(f, state.dayIndex)) counts.set(f.cat, (counts.get(f.cat) || 0) + 1);
+    for (const f of state.all) {
+      if (!opensOn(f, state.dayIndex)) continue;
+      counts.set(f.cat, (counts.get(f.cat) || 0) + 1);
+      if (f.set === "anyang") counts.set(ALL, (counts.get(ALL) || 0) + 1);
+    }
+
+    // 고른 분류가 +N 안에 숨으면 뭘 보고 있는지 알 수 없으니 바 안으로 올린다.
+    const pinned = PRIMARY.includes(state.cat) ? PRIMARY : [...PRIMARY, state.cat];
+    const order = [...pinned, ...CAT_LIST.filter((c) => !pinned.includes(c))];
+
     const bar = $("#chips");
     bar.innerHTML = "";
     $("#chips-panel").innerHTML = "";
 
-    for (const c of ORDER) {
+    for (const c of order) {
       if (!counts.get(c)) continue;
-      const m = CATS[c];
       const b = document.createElement("button");
       b.type = "button";
-      b.className = "chip";
+      b.className = "chip" + (c === ALL ? " chip--all" : "");
       b.dataset.cat = c;
-      b.style.setProperty("--c", m.color);
-      b.setAttribute("aria-pressed", String(state.cats.has(c)));
-      b.innerHTML = `<i></i>${esc(c)}<b>${counts.get(c)}</b>`;
-      b.addEventListener("click", () => {
-        if (state.cats.has(c)) state.cats.delete(c); else state.cats.add(c);
-        apply();
-      });
+      if (pinned.includes(c)) b.dataset.pinned = "1";
+      if (c !== ALL) b.style.setProperty("--c", CATS[c].color);
+      b.setAttribute("aria-pressed", String(state.cat === c));
+      b.innerHTML = (c === ALL ? "" : "<i></i>") + `${esc(c)}<b>${counts.get(c)}</b>`;
+      b.addEventListener("click", () => { state.cat = c; apply(); });
       bar.appendChild(b);
     }
     layoutChips();
   }
 
   /**
-   * PRIMARY 는 항상 줄에 남기고 나머지는 +N 패널로 접는다.
-   * 화면이 더 좁아 PRIMARY 조차 넘치면 폭을 재서 뒤쪽부터 마저 접는다.
+   * 고정(pinned) 칩은 줄에 남기고 나머지는 +N 패널로 접는다.
+   * 화면이 더 좁아 고정 칩조차 넘치면 폭을 재서 뒤쪽부터 마저 접는다.
    */
   function layoutChips() {
     const bar = $("#chips"), panel = $("#chips-panel"), more = $("#chips-more");
@@ -302,7 +312,7 @@
     const kids = [...bar.children];
     const narrow = window.innerWidth <= 560;
     const GAP = narrow ? 4 : 5, MORE_W = narrow ? 44 : 58;
-    let cut = kids.filter((k) => PRIMARY.includes(k.dataset.cat)).length;
+    let cut = kids.filter((k) => k.dataset.pinned).length;
 
     let used = 0;
     for (let i = 0; i < cut; i++) {
@@ -319,10 +329,9 @@
       return;
     }
     kids.slice(cut).forEach((k) => panel.appendChild(k));
-    const onCount = kids.slice(cut).filter((k) => k.getAttribute("aria-pressed") === "true").length;
     more.hidden = false;
-    more.innerHTML = `+${kids.length - cut}` + (onCount ? `<b>${onCount}</b>` : "");
-    more.classList.toggle("has-on", onCount > 0);
+    more.innerHTML = `+${kids.length - cut}`;
+    more.classList.remove("has-on");
     more.setAttribute("aria-expanded", String(state.chipsOpen));
     panel.hidden = !state.chipsOpen;
   }
@@ -497,7 +506,8 @@
          <a href="${m.sourceUrl}" target="_blank" rel="noopener">원문 공지</a></p>
       <p><b>경기 응급의료기관</b>(권역센터·지역센터·지역기관)은 24시간 운영이라 날짜 탭과 무관합니다.
          <b>달빛어린이병원</b>은 야간·휴일 소아 진료 기관으로, 9.24~9.27 은 모두 공휴일이라
-         (토/일/공) 운영시간이 적용됩니다.</p>
+         (토/일/공) 운영시간이 적용됩니다. 필터에서 해당 분류를 고르면 보입니다
+         ("전체" 는 안양시 자료만 뜻합니다).</p>
       <p>현재 지도: <b>${esc(engine.label)}</b>.
          ${osm
            ? "카카오맵을 쓸 수 없어 OpenStreetMap 으로 자동 전환된 상태입니다."
