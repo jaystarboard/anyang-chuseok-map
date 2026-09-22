@@ -236,6 +236,27 @@ body[data-engine="osm"] .bar__engine {
 }
 .fab:hover { background: var(--surface-2); color: var(--text); }
 .fab.on { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.fabzoom {
+  display: grid;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: var(--shadow-m);
+  overflow: hidden;
+}
+.fabzoom button {
+  width: 40px; height: 36px;
+  display: grid; place-items: center;
+  border: 0;
+  background: none;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.fabzoom button + button { border-top: 1px solid var(--border); }
+.fabzoom button:hover:not(:disabled) { background: var(--surface-2); color: var(--text); }
+.fabzoom button:disabled { color: var(--border-strong); cursor: default; }
+.fabzoom svg { width: 17px; height: 17px; stroke-width: 2.2; }
+
 .fab b {
   position: absolute; top: -5px; right: -5px;
   min-width: 17px; height: 17px; padding: 0 4px;

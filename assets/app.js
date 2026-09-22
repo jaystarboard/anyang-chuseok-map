@@ -25,6 +25,7 @@
     ["응급실", "권역센터", "지역센터", "지역기관", "병원", "의원", "치과", "한방", "달빛", "약국"]
       .map((c, i) => [c, i]));
 
+  const ZOOM_MIN = 10, ZOOM_MAX = 19;
   const CLUSTER_CELL = 44;
   const CLUSTER_MAX_ZOOM = 15;
   const CLUSTER_SPAN_MAX = 46;
@@ -229,6 +230,7 @@
       }
     }
     placeMeDot();
+    syncZoomButtons();
     markSelection();
   }
 
@@ -518,6 +520,19 @@
     if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
   }
 
+  function nudgeZoom(step) {
+    const z = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(engine.getZoom()) + step));
+    engine.setZoom(z);
+    setTimeout(syncZoomButtons, 300);
+  }
+
+  function syncZoomButtons() {
+    if (!engine) return;
+    const z = Math.round(engine.getZoom());
+    $("#btn-zoom-in").disabled = z >= ZOOM_MAX;
+    $("#btn-zoom-out").disabled = z <= ZOOM_MIN;
+  }
+
   function locateOff() {
     stopWatch();
     state.origin = null;
@@ -634,6 +649,8 @@
     });
     $("#btn-list").addEventListener("click", () =>
       (state.sheetMode === "list" ? closeDetail() : renderSheetList()));
+    $("#btn-zoom-in").addEventListener("click", () => nudgeZoom(1));
+    $("#btn-zoom-out").addEventListener("click", () => nudgeZoom(-1));
     $("#btn-locate").addEventListener("click", locate);
     $("#sheet-close").addEventListener("click", closeDetail);
     $("#btn-info").addEventListener("click", () => $("#info").showModal());
