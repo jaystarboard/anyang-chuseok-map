@@ -253,7 +253,7 @@
   function renderDays() {
     const today = localISO(new Date());
     $("#days").innerHTML = state.meta.days.map((d, i) => `
-      <button type="button" class="day" role="tab" data-i="${i}" aria-selected="${i === state.dayIndex}">
+      <button type="button" class="day${d.holiday ? " is-holiday" : ""}" role="tab" data-i="${i}" aria-selected="${i === state.dayIndex}">
         <strong>${d.label}</strong><em>${d.dow}${d.holiday ? " " + d.holiday : ""}${d.date === today ? " 오늘" : ""}</em>
       </button>`).join("");
     $("#days").querySelectorAll(".day").forEach((b) => b.addEventListener("click", () => {

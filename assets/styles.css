@@ -10,6 +10,7 @@
   --accent: #1a6fd4;
   --accent-soft: #eaf2fd;
   --focus: #eab64d;
+  --holiday: #d32f2f;
   --shadow-s: 0 1px 2px rgba(20, 28, 38, .08);
   --shadow-m: 0 2px 8px rgba(20, 28, 38, .10), 0 8px 24px rgba(20, 28, 38, .08);
   --shadow-l: 0 -2px 10px rgba(20, 28, 38, .08), 0 -12px 40px rgba(20, 28, 38, .10);
@@ -125,6 +126,16 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .day[aria-selected="true"]::after {
   content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--accent);
 }
+
+/* 달력 표기를 따라 추석 당일은 빨강으로 둔다. */
+.day.is-holiday { color: var(--holiday); }
+.day.is-holiday em { color: color-mix(in srgb, var(--holiday) 70%, #fff); }
+.day.is-holiday[aria-selected="true"] {
+  color: var(--holiday);
+  background: color-mix(in srgb, var(--holiday) 9%, #fff);
+}
+.day.is-holiday[aria-selected="true"] em { color: var(--holiday); }
+.day.is-holiday[aria-selected="true"]::after { background: var(--holiday); }
 
 /* ───────── 지도 무대 ───────── */
 
