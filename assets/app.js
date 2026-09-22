@@ -304,7 +304,9 @@
       if (!counts.get(c)) continue;
       const b = document.createElement("button");
       b.type = "button";
-      b.className = "chip" + (c === ALL ? " chip--all" : "");
+      // 경기도 레이어는 "전체" 에 포함되지 않으므로 칩 배경을 달리해 별개 묶음임을 드러낸다.
+      const ext = c !== ALL && CATS[c].set !== "anyang";
+      b.className = "chip" + (c === ALL ? " chip--all" : "") + (ext ? " chip--ext" : "");
       b.dataset.cat = c;
       if (c !== ALL) b.style.setProperty("--c", CATS[c].color);
       b.setAttribute("aria-pressed", String(state.cat === c));

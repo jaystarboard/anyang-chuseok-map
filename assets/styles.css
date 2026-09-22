@@ -207,6 +207,16 @@ body[data-engine="osm"] .bar__engine {
 }
 .chip i { width: 6px; height: 6px; border-radius: 50%; background: var(--c); flex: none; }
 .chip--all { --c: var(--accent); }
+
+/* "전체" 에 포함되지 않는 경기도 전역 레이어. 배경·점선 테두리로 별개 묶음임을 표시한다. */
+.chip--ext {
+  background: #eef1f5;
+  border-color: #c8d0da;
+  border-style: dashed;
+  color: var(--text-faint);
+}
+.chip--ext:hover { background: #e3e8ee; }
+.chip--ext[aria-pressed="true"] { border-style: solid; }
 .chip b { font-weight: 700; color: var(--text-faint); font-variant-numeric: tabular-nums; }
 .chip:hover { background: var(--surface-2); }
 .chip[aria-pressed="true"] {
