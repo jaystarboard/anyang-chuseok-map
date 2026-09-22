@@ -90,7 +90,7 @@
   const kakaoLink = (f) =>
     "https://map.kakao.com/?q=" + encodeURIComponent(f.addr ? roadOnly(f.addr) : `${f.gu} ${f.name}`);
 
-  let engine, pinHandles = [], meHandle = null, popHandle = null, idleTimer = null;
+  let engine, pinHandles = [], meHandle = null, popHandle = null, idleTimer = null, watchId = null;
 
   function buildGroups(list) {
     const byPos = new Map();
@@ -454,9 +454,21 @@
       <p>오류 제보·문의: <a href="mailto:${MAIL}">${MAIL}</a></p>`;
   }
 
+  function placeMeDot() {
+    if (meHandle) engine.removeOverlay(meHandle);
+    const dot = document.createElement("div");
+    dot.className = "medot";
+    meHandle = engine.addOverlay(dot, state.origin, { yAnchor: 0.5, xAnchor: 0.5, zIndex: 20 });
+  }
+
+  function stopWatch() {
+    if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
+  }
+
   function locate() {
     const btn = $("#btn-locate");
     if (state.origin) {
+      stopWatch();
       state.origin = null;
       if (meHandle) { engine.removeOverlay(meHandle); meHandle = null; }
       btn.classList.remove("on");
@@ -464,55 +476,31 @@
       return;
     }
     if (!navigator.geolocation) { alert("이 브라우저는 위치 기능을 지원하지 않습니다."); return; }
+
     btn.disabled = true;
-    navigator.geolocation.getCurrentPosition(
+    let first = true;
+    stopWatch();
+    watchId = navigator.geolocation.watchPosition(
       (pos) => {
         btn.disabled = false;
         state.origin = [pos.coords.latitude, pos.coords.longitude];
-        const dot = document.createElement("div");
-        dot.className = "medot";
-        if (meHandle) engine.removeOverlay(meHandle);
-        meHandle = engine.addOverlay(dot, state.origin, { yAnchor: 0.5, xAnchor: 0.5, zIndex: 20 });
+        placeMeDot();
         btn.classList.add("on");
-        engine.flyTo(state.origin, 16);
+        if (first) {
+          first = false;
+          engine.flyTo(state.origin, 16);
+        }
         if (state.sheetMode === "list") renderSheetList();
       },
-      () => { btn.disabled = false; alert("위치를 가져오지 못했습니다. 브라우저 위치 권한을 확인해 주세요."); },
-      { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
+      (err) => {
+        btn.disabled = false;
+        if (first) {
+          stopWatch();
+          alert("위치를 가져오지 못했습니다. 브라우저 위치 권한을 확인해 주세요.");
+        }
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
     );
-  }
-
-  async function setEngine(force) {
-    const keep = engine ? { center: engine.getCenter(), zoom: engine.getZoom() } : null;
-    if (engine) {
-      pinHandles.forEach((h) => engine.removeOverlay(h));
-      pinHandles = [];
-      closePopup();
-      if (meHandle) { engine.removeOverlay(meHandle); meHandle = null; }
-      engine.destroy();
-    }
-
-    engine = await MapEngine.create($("#map"), {
-      center: keep ? keep.center : [37.3935, 126.9465],
-      zoom: keep ? keep.zoom : 13,
-      force,
-    });
-    document.body.dataset.engine = engine.name;
-    engine.on("click", closeDetail);
-    engine.on("idle", () => {
-      clearTimeout(idleTimer);
-      idleTimer = setTimeout(renderPins, 90);
-    });
-    if (!keep) engine.fitBounds(state.all.filter((f) => f.set === "anyang").map((f) => [f.lat, f.lon]));
-
-    if (state.origin) {
-      const dot = document.createElement("div");
-      dot.className = "medot";
-      meHandle = engine.addOverlay(dot, state.origin, { yAnchor: 0.5, xAnchor: 0.5, zIndex: 20 });
-    }
-    renderInfo();
-    renderPins();
-    return engine.name;
   }
 
   function pickDefaultDay() {
