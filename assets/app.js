@@ -455,10 +455,11 @@
   }
 
   function placeMeDot() {
-    if (meHandle) engine.removeOverlay(meHandle);
+    if (meHandle) { engine.moveOverlay(meHandle, state.origin); return; }
     const dot = document.createElement("div");
     dot.className = "medot";
-    meHandle = engine.addOverlay(dot, state.origin, { yAnchor: 0.5, xAnchor: 0.5, zIndex: 20 });
+    meHandle = engine.addOverlay(dot, engine.getCenter(), { yAnchor: 0.5, xAnchor: 0.5, zIndex: 20 });
+    engine.moveOverlay(meHandle, state.origin);
   }
 
   function stopWatch() {

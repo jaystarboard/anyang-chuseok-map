@@ -74,6 +74,7 @@ window.MapEngine = (() => {
         return ov;
       },
       removeOverlay(h) { if (h) h.setMap(null); },
+      moveOverlay(h, pos) { if (h) h.setPosition(ll(pos)); },
       project(pos) {
         const p = map.getProjection().containerPointFromCoords(ll(pos));
         return { x: p.x, y: p.y };
@@ -142,6 +143,7 @@ window.MapEngine = (() => {
         return ov;
       },
       removeOverlay(h) { if (h) map.removeOverlay(h); },
+      moveOverlay(h, pos) { if (h) h.setPosition(coord(pos)); },
       project(pos) {
         const p = map.getPixelFromCoordinate(coord(pos));
         return p ? { x: p[0], y: p[1] } : { x: -1e6, y: -1e6 };
