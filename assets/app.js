@@ -82,12 +82,24 @@
   }
   const fmtDist = (m) => (m < 1000 ? `${Math.round(m / 10) * 10}m` : `${(m / 1000).toFixed(1)}km`);
 
-  const shortAddr = (addr) =>
-    String(addr || "").replace(/^(?:경기도\s*)?안양시\s*/, "").replace(/\s*\([^)]*\)\s*$/, "").trim();
+  /** 카드에 구를 따로 보여 주므로 주소에서 시·도·구를 떼어 중복을 없앤다. */
+  function shortAddr(f) {
+    let a = String(f.addr || "").replace(/\s+/g, " ").replace(/^경기도\s*/, "");
+    a = a.replace(/^안양시\s*(?:동안구|만안구)\s*/, "");
+    if (f.gu) a = a.replace(new RegExp("^" + f.gu.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\s*"), "");
+    return a.replace(/\s*\([^)]*\)\s*$/, "").trim();
+  }
+
+  /** 동·호수가 붙으면 검색이 흐려지므로 도로명+건물번호까지만 남긴다. */
+  function roadOnly(addr) {
+    const a = String(addr || "").replace(/\s+/g, " ").replace(/(로|길)\s+(\d+번길)/, "$1$2");
+    const m = a.match(/^(.*?(?:로|길)\d*번?길?)\s+(\d+(?:-\d+)?)/);
+    return m ? `${m[1]} ${m[2]}` : a.split(",")[0].trim();
+  }
 
   /** 카카오맵 버튼은 주소로만 검색한다 — 기관명을 섞으면 동명 업소로 튄다. */
   const kakaoLink = (f) =>
-    "https://map.kakao.com/?q=" + encodeURIComponent(f.addr ? f.addr : `${f.gu} ${f.name}`);
+    "https://map.kakao.com/?q=" + encodeURIComponent(f.addr ? roadOnly(f.addr) : `${f.gu} ${f.name}`);
 
   /* ─────────── 지도 ─────────── */
 
@@ -300,7 +312,7 @@
         <span class="card__name">${esc(f.name)}</span>
         <span class="card__kind">${esc(f.kind)}</span>
       </div>
-      <div class="card__addr"><em>${esc(f.gu)}</em> ${esc(shortAddr(f.addr)) || "주소 미표기"}${
+      <div class="card__addr"><em>${esc(f.gu)}</em> ${esc(shortAddr(f)) || "주소 미표기"}${
         f.partner ? ` · 협약약국 ${esc(f.partner)}` : ""}</div>
       ${schedHtml(f)}
       <div class="acts">
