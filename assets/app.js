@@ -28,7 +28,7 @@
   const ZOOM_MIN = 10, ZOOM_MAX = 19;
   const SELECTED_Z = 200;      // 마커(<=100)보다 위, 팝업(300)보다 아래
   // 화면상 중심 간 최소 간격(px). 가장 큰 클러스터 원(44px)보다 커야 서로 겹치지 않는다.
-  const CLUSTER_GAP = 54;
+  const CLUSTER_GAP = 50;
   const CLUSTER_MAX_ZOOM = 15;
 
   const state = {
@@ -149,8 +149,10 @@
    * 화면 거리 기준으로 가까운 지점들을 묶는다.
    *
    * 격자로 자르면 경계에 걸친 두 셀의 무게중심이 몇 px 까지 붙어 원이 겹친다.
-   * 거리 기준은 그런 경계가 없고, 패닝해도 점들 사이의 상대 거리는 그대로라
-   * 확대/축소할 때만 묶임이 바뀐다(state.groups 순서가 고정이라 결과도 결정적이다).
+   * 그렇다고 흡수할 때마다 중심을 옮기면 연쇄로 덩어리가 계속 커진다.
+   * 그래서 먼저 잡힌 지점을 리더로 고정해 반경을 묶고, 표시도 리더 자리에 한다.
+   * 리더끼리는 CLUSTER_GAP 이상 떨어져 있으므로 원이 겹치지 않는다.
+   * 패닝해도 점들 사이의 상대 거리는 그대로라 확대/축소할 때만 묶임이 바뀐다.
    */
   function clusterGroups() {
     if (!engine || engine.getZoom() >= CLUSTER_MAX_ZOOM) {
@@ -164,24 +166,16 @@
       for (const c of cells) {
         if (Math.hypot(c.x - p.x, c.y - p.y) < CLUSTER_GAP) { host = c; break; }
       }
-      if (host) {
-        host.groups.push(g);
-        host.sx += p.x; host.sy += p.y;
-        host.x = host.sx / host.groups.length;
-        host.y = host.sy / host.groups.length;
-      } else {
-        cells.push({ groups: [g], x: p.x, y: p.y, sx: p.x, sy: p.y });
-      }
+      if (host) host.groups.push(g);
+      else cells.push({ groups: [g], x: p.x, y: p.y, lead: g });
     }
 
-    return cells.map((c) => {
-      if (c.groups.length === 1) {
-        const g = c.groups[0];
-        return { single: g, groups: c.groups, lat: g.lat, lon: g.lon };
-      }
-      const [lat, lon] = engine.unproject({ x: c.x, y: c.y });
-      return { single: null, groups: c.groups, lat, lon };
-    });
+    return cells.map((c) => ({
+      single: c.groups.length === 1 ? c.lead : null,
+      groups: c.groups,
+      lat: c.lead.lat,
+      lon: c.lead.lon,
+    }));
   }
 
   function renderPins() {
