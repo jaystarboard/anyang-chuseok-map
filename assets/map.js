@@ -1,11 +1,3 @@
-/**
- * 지도 엔진 추상화 — 카카오맵을 쓰되, 못 쓰면 OpenLayers + OSM 으로 자동 전환한다.
- *
- * 카카오 JS 키는 도메인 제한과 일일 무료 쿼터가 있어서 둘 중 하나라도 걸리면
- * dapi.kakao.com 이 sdk.js 에 401 을 주고 window.kakao 가 아예 정의되지 않는다.
- * 그 경우(또는 로드가 지연되는 경우) OpenLayers 를 내려받아 같은 인터페이스로 갈아끼운다.
- * UI 쪽은 어느 엔진인지 몰라도 되도록 좌표는 전부 [lat, lon], 줌은 값이 클수록 확대(OL 기준)로 맞춘다.
- */
 window.MapEngine = (() => {
   "use strict";
 
@@ -38,10 +30,8 @@ window.MapEngine = (() => {
     });
   }
 
-  /* ───────────────────── 카카오 어댑터 ───────────────────── */
-
   function kakaoAdapter(el, opts) {
-    // 카카오 level 은 작을수록 확대. OL 과 맞추려고 zoom = 20 - level 로 환산한다.
+
     const toLevel = (zoom) => Math.max(1, Math.min(14, Math.round(20 - zoom)));
     const toZoom = (level) => 20 - level;
 
@@ -63,6 +53,7 @@ window.MapEngine = (() => {
       getZoom() { return toZoom(map.getLevel()); },
       setZoom(z) { map.setLevel(toLevel(z)); },
       zoomAround(pos, z) { map.setLevel(toLevel(z), { anchor: ll(pos), animate: true }); },
+      flyTo(pos, z) { map.setLevel(toLevel(z)); map.panTo(ll(pos)); },
       panTo(pos) { map.panTo(ll(pos)); },
       setCenter(pos) { map.setCenter(ll(pos)); },
       getCenter() { const c = map.getCenter(); return [c.getLat(), c.getLng()]; },
@@ -93,8 +84,6 @@ window.MapEngine = (() => {
       },
     };
   }
-
-  /* ───────────────────── OpenLayers 어댑터 ───────────────────── */
 
   function olAdapter(el, opts) {
     const view = new ol.View({
@@ -128,6 +117,7 @@ window.MapEngine = (() => {
       getZoom() { return view.getZoom(); },
       setZoom(z) { view.animate({ zoom: z, duration: 220 }); },
       zoomAround(pos, z) { view.animate({ center: coord(pos), zoom: z, duration: 260 }); },
+      flyTo(pos, z) { view.animate({ center: coord(pos), zoom: z, duration: 260 }); },
       panTo(pos) { view.animate({ center: coord(pos), duration: 260 }); },
       setCenter(pos) { view.setCenter(coord(pos)); },
       getCenter() { const c = ol.proj.toLonLat(view.getCenter()); return [c[1], c[0]]; },
@@ -140,7 +130,7 @@ window.MapEngine = (() => {
           "EPSG:4326", "EPSG:3857"), { size: map.getSize(), padding: [pad, pad, pad, pad], maxZoom: 17 });
       },
       addOverlay(element, pos, o = {}) {
-        // 카카오의 yAnchor/xAnchor(0~1) 를 OL 의 positioning 문자열로 옮긴다.
+
         const v = (o.yAnchor ?? 1) >= 1 ? "bottom" : (o.yAnchor ?? 1) <= 0 ? "top" : "center";
         const h = (o.xAnchor ?? 0.5) >= 1 ? "right" : (o.xAnchor ?? 0.5) <= 0 ? "left" : "center";
         const ov = new ol.Overlay({
@@ -163,13 +153,6 @@ window.MapEngine = (() => {
     };
   }
 
-  /* ───────────────────── 팩토리 ───────────────────── */
-
-  /**
-   * opts.force 로 엔진을 강제할 수 있다 ("osm" | "kakao").
-   * 쿼터 소진 상황을 실제로 만들지 않고도 폴백 화면을 확인하려고 둔 장치.
-   * "kakao" 를 강제해도 SDK 가 없으면 실제 동작대로 OSM 으로 내려간다.
-   */
   async function create(el, opts) {
     if (opts.force !== "osm" && await kakaoReady()) {
       try {

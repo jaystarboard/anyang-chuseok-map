@@ -15,7 +15,6 @@
   --shadow-m: 0 2px 8px rgba(20, 28, 38, .10), 0 8px 24px rgba(20, 28, 38, .08);
   --shadow-l: 0 -2px 10px rgba(20, 28, 38, .08), 0 -12px 40px rgba(20, 28, 38, .10);
 
-
   --bar-h: 40px;
   --days-h: 34px;
 }
@@ -42,8 +41,6 @@ body {
 }
 
 svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
-
-/* ───────── 상단 바 (최소 높이) ───────── */
 
 .bar {
   flex: none;
@@ -73,7 +70,7 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
   border-radius: 999px;
   padding: 2px 8px;
 }
-/* 카카오를 못 쓰고 OSM 으로 내려갔을 때만 보이는 표시 */
+
 .bar__engine { display: none; }
 body[data-engine="osm"] .bar__engine {
   display: inline;
@@ -93,8 +90,6 @@ body[data-engine="osm"] .bar__engine {
   cursor: pointer;
 }
 .bar__info:hover { background: var(--surface-2); color: var(--text); }
-
-/* ───────── 날짜 탭 (글자 가로 배열) ───────── */
 
 .days {
   flex: none;
@@ -131,7 +126,6 @@ body[data-engine="osm"] .bar__engine {
   content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--accent);
 }
 
-/* 달력 표기를 따라 추석 당일은 빨강으로 둔다. */
 .day.is-holiday { color: var(--holiday); }
 .day.is-holiday em { color: color-mix(in srgb, var(--holiday) 70%, #fff); }
 .day.is-holiday[aria-selected="true"] {
@@ -140,8 +134,6 @@ body[data-engine="osm"] .bar__engine {
 }
 .day.is-holiday[aria-selected="true"] em { color: var(--holiday); }
 .day.is-holiday[aria-selected="true"]::after { background: var(--holiday); }
-
-/* ───────── 지도 무대 ───────── */
 
 .stage { position: relative; flex: 1; min-height: 0; }
 #map { position: absolute; inset: 0; background: var(--surface-2); }
@@ -186,7 +178,6 @@ body[data-engine="osm"] .bar__engine {
 }
 .search button svg { width: 13px; height: 13px; stroke-width: 2.4; }
 
-/* 분류는 한 번에 하나만 고르므로 접지 않고 줄바꿈으로 전부 보여 준다. */
 .chips { display: flex; flex-wrap: wrap; gap: 4px; width: 100%; padding: 1px; }
 .chip {
   flex: none;
@@ -208,7 +199,6 @@ body[data-engine="osm"] .bar__engine {
 .chip i { width: 6px; height: 6px; border-radius: 50%; background: var(--c); flex: none; }
 .chip--all { --c: var(--accent); }
 
-/* "전체" 에 포함되지 않는 경기도 전역 레이어. 배경·점선 테두리로 별개 묶음임을 표시한다. */
 .chip--ext {
   background: #eef1f5;
   border-color: #c8d0da;
@@ -226,8 +216,6 @@ body[data-engine="osm"] .bar__engine {
   font-weight: 600;
 }
 .chip[aria-pressed="true"] b { color: var(--c); }
-
-/* ───────── 지도 위 버튼 (우측 하단) ───────── */
 
 .ov--fabs {
   right: max(10px, env(safe-area-inset-right));
@@ -256,8 +244,6 @@ body[data-engine="osm"] .bar__engine {
   background: var(--accent); color: #fff;
   font-size: 10.5px; font-weight: 700; font-variant-numeric: tabular-nums;
 }
-
-/* ───────── 지도 마커 ───────── */
 
 .pin {
   min-width: 34px;
@@ -299,8 +285,6 @@ body[data-engine="osm"] .bar__engine {
   z-index: 10;
 }
 
-/* ───────── 클러스터 ───────── */
-
 .cluster {
   width: 38px; height: 38px;
   display: grid; place-items: center;
@@ -324,14 +308,11 @@ body[data-engine="osm"] .bar__engine {
   box-shadow: 0 0 0 1px rgba(0, 0, 0, .15), 0 2px 6px rgba(0, 0, 0, .3);
 }
 
-/* OpenLayers 폴백에서도 오버레이가 카카오와 같은 위치·크기로 보이게 한다. */
 .ol-overlay-plain { position: absolute; }
 #map .ol-zoom { top: 54px; left: 10px; }
 #map .ol-attribution { font-size: 10.5px; }
 
-/* ───────── PC 미니 팝업 (마커에 붙는 말풍선) ───────── */
-
-.popwrap { padding-bottom: 46px; }          /* 마커 위로 띄운다 */
+.popwrap { padding-bottom: 46px; }
 .pop {
   position: relative;
   width: 324px;
@@ -378,13 +359,8 @@ body[data-engine="osm"] .bar__engine {
 .pop__body::-webkit-scrollbar-track { background: transparent; }
 .pop .sheet__head { padding-right: 26px; }
 
-/* ───────── 하단 시트 ───────── */
-
-/* display:flex 가 hidden 속성의 display:none 을 이기므로 명시적으로 눌러 준다. */
 .sheet[hidden] { display: none; }
 
-/* 여러 곳이 묶인 경우에도 시트가 화면을 잡아먹지 않게 높이를 고정하고 안에서 스크롤한다.
-   대략 한 곳 분량(카드 1개)이 보이는 높이. */
 .sheet {
   position: absolute;
   z-index: 30;
@@ -449,7 +425,6 @@ body[data-engine="osm"] .bar__engine {
 }
 .sheet__back:hover { background: var(--surface-2); }
 
-/* 카드 = 기관 1곳 */
 .card { padding: 10px 0; border-top: 1px solid var(--border); }
 .card:first-of-type { border-top: 0; }
 .card__top { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
@@ -481,7 +456,7 @@ body[data-engine="osm"] .bar__engine {
   font-variant-numeric: tabular-nums;
   line-height: 1.3;
 }
-/* 일자를 먼저, 시간을 아래에 둔다. */
+
 .sched div span { display: block; color: var(--text-faint); font-size: 10.5px; margin-bottom: 1px; }
 .sched div.off { color: var(--text-faint); background: var(--surface-2); }
 .sched div.sel { border-color: var(--accent); background: var(--accent-soft); color: var(--text); font-weight: 600; }
@@ -505,7 +480,6 @@ body[data-engine="osm"] .bar__engine {
 .acts a.call { background: var(--accent); border-color: var(--accent); color: #fff; }
 .acts a.call:hover { filter: brightness(1.07); }
 
-/* 목록 모드 */
 .rows { margin: 0; padding: 0; list-style: none; }
 .rows li + li { border-top: 1px solid var(--border); }
 .rows__txt { min-width: 0; overflow: hidden; }
@@ -521,8 +495,6 @@ body[data-engine="osm"] .bar__engine {
 .rows .hr { margin-left: auto; font-size: 12px; color: var(--text-dim); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .rows .dist { margin-left: auto; font-size: 11.5px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
 .empty { padding: 26px 0; text-align: center; color: var(--text-faint); font-size: 13px; }
-
-/* ───────── 안내 모달 ───────── */
 
 .dlg {
   border: 1px solid var(--border);
@@ -544,7 +516,6 @@ body[data-engine="osm"] .bar__engine {
   background: var(--accent); color: #fff; font: inherit; font-weight: 600; cursor: pointer;
 }
 
-/* 좁은 화면에서도 응급실·병원·의원·약국 네 개는 줄에 남도록 칩을 조밀하게 만든다. */
 @media (max-width: 560px) {
   .chips { gap: 3px; }
   .chip { height: 24px; padding: 0 6px; font-size: 11px; gap: 3px; }
@@ -552,8 +523,6 @@ body[data-engine="osm"] .bar__engine {
   .search { height: 34px; }
   .search input { font-size: 13px; }
 }
-
-/* ───────── 데스크톱: 시트를 지도 위 카드로 ───────── */
 
 @media (min-width: 761px) {
   .sheet {

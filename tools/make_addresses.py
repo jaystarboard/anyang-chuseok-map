@@ -1,18 +1,12 @@
-#!/usr/bin/env python3
-"""배포 XLSX -> tools/addresses.json (카카오 지오코딩 하네스 입력).
-
-달빛어린이병원 시트에는 주소 컬럼이 없어 기관명 장소검색(keyword)으로 좌표를 잡는다.
-"""
 import json, os, re, sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import build_dataset as B                                            # noqa: E402
+import build_dataset as B
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def road_query(gu: str, address: str) -> str:
-    """'경기도 안양시 <구> <도로명> <번호>' 만 남긴다 (동/호가 붙으면 주소검색이 실패한다)."""
     a = re.sub(r"\s+", " ", address).strip()
     a = re.sub(r"(로|길)\s+(\d+번길)", r"\1\2", a)
     m = (re.search(r"(?:동안구|만안구)\s+(\S*?(?:로|길)\d*번?길?)\s+(\d+(?:-\d+)?)", a)

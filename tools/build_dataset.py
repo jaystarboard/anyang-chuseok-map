@@ -1,28 +1,3 @@
-#!/usr/bin/env python3
-"""안양시 배포 XLSX -> data/facilities.json 빌드 (동안구 + 만안구).
-
-원본: 안양시보건소 공지 「2026년 추석 연휴 문여는 의료기관 및 약국 현황 안내」의 첨부
-      ★(안양시)2026 추석 연휴기간 문 여는 병원 및 약국 명단(최종배포용).xlsx
-      https://www.anyang.go.kr/health/selectBbsNttView.do?key=1369&bbsNo=108&nttNo=458257
-
-두 구의 시트 양식이 다르다.
- - 동안구: 9열(비고 포함), 헤더 `9.24.(목)`, `응급실소계/병의원소계/약국소계` 3종 소계
- - 만안구: 8열(비고 없음), 헤더 `9. 24.(목)`(공백 있음), 소계 행이 전부 `소계` 한 단어,
-           6행에 별도 총계 문구, 일부 주소가 `삼덕로 9` 처럼 시·구 없이 도로명만 적혀 있음
-그래서 시트별 파서를 두지 않고 헤더 위치와 소계 패턴을 찾아 공통 처리한다.
-
-같은 파일의 뒤 두 시트는 경기도 전역 자료라 별도 레이어로 싣는다.
- - 경기도 응급의료기관: 권역구분명(권역센터/지역센터/지역기관)으로 나눈다. 24시간 운영.
- - 경기도 달빛어린이병원: 한 기관이 2행(평일 / 토·일·공휴일 운영시간)에 걸쳐 있다.
-   주소 컬럼이 없어 좌표는 기관명 장소검색으로 잡는다.
-   9.24~9.27 은 모두 공휴일·일요일이므로 화면에는 (토/일/공) 시간을 쓴다.
-
-좌표는 tools/coords.json (카카오 지오코딩 결과) 에서 가져온다.
-
-사용법:
-    pip install openpyxl
-    python tools/build_dataset.py "<배포 XLSX 경로>"
-"""
 from __future__ import annotations
 
 import json
@@ -47,8 +22,6 @@ DAYS = [
 ]
 ALWAYS_OPEN = "응급실운영"
 
-# 원본 「구분」 -> 화면 분류. 응급실운영 시간이 찍힌 곳은 구분과 무관하게 응급실로 올린다
-# (한밤중에 필요한 정보는 "지금 여는 데가 어디냐" 이므로).
 CATEGORY = {
     "권역응급의료센터": "응급실", "지역응급의료센터": "응급실",
     "종합병원": "병원", "병원": "병원", "요양병원": "병원",
@@ -57,19 +30,14 @@ CATEGORY = {
 }
 PHARMACY_KINDS = {"약국"}
 
-# 경기도 응급의료기관 권역구분명 -> 화면 분류
 ER_TIERS = ("권역센터", "지역센터", "지역기관")
 
-
-
-# ----------------------------------------------------------------------------- XLSX
 
 def norm(v) -> str:
     return re.sub(r"\s+", " ", str(v)).strip() if v is not None else ""
 
 
 def read_sheet(ws, gu: str) -> tuple[list[dict], dict[str, list[int]]]:
-    """한 구 시트에서 기관 행과 소계 행을 뽑는다."""
     header = next((r for r in range(1, 12)
                    if norm(ws.cell(r, 1).value) == "구분" and norm(ws.cell(r, 2).value) == "명칭"), None)
     if header is None:
@@ -81,7 +49,6 @@ def read_sheet(ws, gu: str) -> tuple[list[dict], dict[str, list[int]]]:
         if not kind and not name:
             continue
         if kind.endswith("소계") or kind == "소계":
-            # 소계 행의 명칭 칸은 총 개소, 5~8열은 일자별 개소
             if name.isdigit():
                 subtotals[f"{kind}@{r}"] = [name] + [norm(ws.cell(r, c).value) for c in range(5, 9)]
             continue
@@ -115,7 +82,6 @@ def read_xlsx(path: str) -> list[dict]:
 
 
 def verify(gu: str, rows: list[dict], subtotals: dict[str, list[int]]) -> None:
-    """시트가 스스로 밝힌 소계와 대조. 어긋나면 파싱이 깨진 것이므로 중단한다."""
     got_ph = [sum(1 for r in rows if r["kind"] in PHARMACY_KINDS and r["hours"][i]) for i in range(4)]
     got_med = [sum(1 for r in rows if r["kind"] not in PHARMACY_KINDS and r["hours"][i]) for i in range(4)]
     n_ph = sum(1 for r in rows if r["kind"] in PHARMACY_KINDS)
@@ -142,7 +108,6 @@ def verify(gu: str, rows: list[dict], subtotals: dict[str, list[int]]) -> None:
 
 
 def merged_value(ws, row: int, col: int):
-    """병합된 셀은 좌상단에만 값이 있다. 달빛 시트의 시군 컬럼이 여러 행에 걸쳐 병합돼 있다."""
     v = ws.cell(row, col).value
     if v is not None:
         return v
@@ -153,7 +118,6 @@ def merged_value(ws, row: int, col: int):
 
 
 def tel_with_area(tel: str) -> str:
-    """경기도 시트는 지역번호를 뺀 채로 적혀 있다. 1588 같은 전국대표번호는 그대로 둔다."""
     t = norm(tel).replace(" ", "")
     if not t or t.startswith("0") or re.match(r"^1\d{3}-", t):
         return t
@@ -161,7 +125,6 @@ def tel_with_area(tel: str) -> str:
 
 
 def read_er_sheet(wb) -> list[dict]:
-    """경기도 응급의료기관 — 권역구분명으로 나눈 24시간 응급실."""
     ws = wb[ER_SHEET]
     header = next((r for r in range(1, 6) if norm(ws.cell(r, 1).value) == "시군명"), None)
     if header is None:
@@ -183,12 +146,6 @@ def read_er_sheet(wb) -> list[dict]:
 
 
 def read_moon_sheet(wb) -> list[dict]:
-    """경기도 달빛어린이병원.
-
-    한 기관이 보통 2행(평일 / 토·일·공휴일)에 걸쳐 있지만 한 줄만 있는 곳도 있어
-    행 위치가 아니라 `(평일)` / `(토/일/공)` 접두어로 분류한다.
-    추석 연휴 9.24~9.27 은 전부 공휴일·일요일이므로 화면에 쓰는 값은 휴일 쪽이다.
-    """
     ws = wb[MOON_SHEET]
     rows = []
     for r in range(1, ws.max_row + 1):
@@ -219,14 +176,7 @@ def read_moon_sheet(wb) -> list[dict]:
     return rows
 
 
-# ------------------------------------------------------------------------- 좌표
-
 def load_coords() -> dict:
-    """tools/geocode.html (카카오 addressSearch) 로 만든 좌표표.
-
-    카카오 JS 키는 도메인 제한이 있어 등록된 도메인에서만 동작하므로 런타임 지오코딩 대신
-    한 번 만들어 둔 결과를 쓴다. 명단이 바뀌면 addresses.json 을 다시 뽑아 하네스를 돌린다.
-    """
     if not os.path.exists(COORDS):
         raise SystemExit(f"{COORDS} 가 없습니다. tools/geocode.html 을 등록된 도메인에서 실행해 만드세요.")
     raw = json.load(open(COORDS, encoding="utf-8"))
@@ -234,7 +184,6 @@ def load_coords() -> dict:
 
 
 def coord_key(r: dict) -> str:
-    """안양시 명단은 구 기준, 경기도 레이어는 접두어로 구분한다(안양샘병원처럼 양쪽에 나오는 곳이 있다)."""
     prefix = r.get("set", "anyang")
     return f"{r['gu']}|{r['name']}" if prefix == "anyang" else f"{prefix}|{r['gu']}|{r['name']}"
 
@@ -249,11 +198,9 @@ def attach_coords(rows: list[dict]) -> None:
         r["lat"], r["lon"] = coords[coord_key(r)]
 
 
-# ---------------------------------------------------------------------------- build
-
 def main() -> None:
     if len(sys.argv) < 2:
-        raise SystemExit(__doc__)
+        raise SystemExit("usage: python tools/build_dataset.py <배포 XLSX 경로>")
     import openpyxl
     wb = openpyxl.load_workbook(sys.argv[1], data_only=True)
 

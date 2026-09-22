@@ -1,25 +1,9 @@
-/**
- * 추석 연휴 문여는 병원·약국 — 안양시 전체
- *
- * 지도가 화면 대부분을 차지하고 검색·필터·버튼은 지도 위 오버레이로 띄운다.
- * 좌표는 빌드 시점에 카카오 지오코딩으로 구워 두어 런타임 지오코딩은 하지 않는다.
- * 지도 엔진(카카오 / OSM)은 assets/map.js 가 골라 주므로 여기서는 신경 쓰지 않는다.
- */
 (() => {
   "use strict";
 
   const ALWAYS_OPEN = "응급실운영";
   const MAIL = "jaystarboard@gmail.com";
 
-  /**
-   * 분류 -> 마커 글자·색.
-   *
-   * 필터가 단일 선택이라 한 화면에 같이 뜨는 건 "전체" 일 때의 안양시 6종뿐이다.
-   * 그 여섯이 서로 최대한 멀어지도록 색상환을 갈라 배치했다 —
-   * 빨강(0°) 주황(28°) 초록(123°) 파랑(210°) 보라(277°) 자홍(335°).
-   * 파랑·청록·초록이 몰려 병원/의원/약국이 구별되지 않던 문제를 의원을 주황으로 빼서 해결했다.
-   * 경기 레이어는 단독으로만 뜨므로 무채·갈색·청록 계열로 따로 둔다.
-   */
   const CATS = {
     "응급실":   { ch: "응", color: "#c62828", set: "anyang" },
     "병원":     { ch: "병", color: "#1565c0", set: "anyang" },
@@ -33,27 +17,24 @@
     "달빛":     { ch: "달", color: "#00695c", set: "moon" },
   };
 
-  /** 필터는 한 번에 하나만 고른다. "전체" 는 안양시 6종 전부. */
   const ALL = "전체";
-  /** 필터 칩 순서. 전부 한 화면에 보이도록 줄바꿈으로 펼친다. */
+
   const CAT_LIST = [ALL, ...Object.keys(CATS)];
 
-  /** 같은 지점에 묶였을 때 대표로 세울 분류. 급할 때 찾는 쪽이 앞, 약국이 맨 뒤. */
   const PRIORITY = new Map(
     ["응급실", "권역센터", "지역센터", "지역기관", "병원", "의원", "치과", "한방", "달빛", "약국"]
       .map((c, i) => [c, i]));
 
-  // 격자가 넓으면 수 km 떨어진 곳까지 한 덩어리로 묶여 대표점이 실제 위치와 멀어진다.
-  const CLUSTER_CELL = 44;      // px. 이 격자 안에 겹치는 지점만 묶는다
-  const CLUSTER_MAX_ZOOM = 15;  // 이보다 확대하면 항상 개별 마커로 푼다
-  const CLUSTER_SPAN_MAX = 46;  // px. 묶인 뒤에도 퍼짐이 이보다 크면 쪼갠다
-  const GRID_LAT = 37.39;       // 격자 경도 스케일 기준 위도 (안양 부근)
+  const CLUSTER_CELL = 44;
+  const CLUSTER_MAX_ZOOM = 15;
+  const CLUSTER_SPAN_MAX = 46;
+  const GRID_LAT = 37.39;
 
   const state = {
     meta: null,
     all: [],
     dayIndex: 0,
-    cat: ALL,                // 단일 선택 필터
+    cat: ALL,
     query: "",
     origin: null,
     visible: [],
@@ -67,17 +48,13 @@
     (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const isDesktop = () => window.innerWidth > 760;
 
-  /* ─────────── 시간 ─────────── */
-
   const localISO = (d) => {
     const p = (n) => String(n).padStart(2, "0");
     return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
   };
 
-  /** 경기 레이어는 날짜와 무관하게 항상 대상이다. */
   const opensOn = (f, i) => (f.set !== "anyang" ? true : Boolean(f.hours[i]));
 
-  /** "전체" 는 안양시 자료만 뜻한다. 경기 레이어는 해당 분류를 직접 골라야 보인다. */
   const inScope = (f) => (state.cat === ALL ? f.set === "anyang" : f.cat === state.cat);
 
   function hoursText(f, i) {
@@ -88,8 +65,6 @@
     return h === ALWAYS_OPEN ? "24시간" : h;
   }
 
-  /* ─────────── 주소·거리 ─────────── */
-
   function distanceM(a, b) {
     const R = 6371000, rad = Math.PI / 180;
     const dLat = (b[0] - a[0]) * rad, dLon = (b[1] - a[1]) * rad;
@@ -99,7 +74,6 @@
   }
   const fmtDist = (m) => (m < 1000 ? `${Math.round(m / 10) * 10}m` : `${(m / 1000).toFixed(1)}km`);
 
-  /** 카드에 구를 따로 보여 주므로 주소에서 시·도·구를 떼어 중복을 없앤다. */
   function shortAddr(f) {
     let a = String(f.addr || "").replace(/\s+/g, " ").replace(/^경기도\s*/, "");
     a = a.replace(/^안양시\s*(?:동안구|만안구)\s*/, "");
@@ -107,22 +81,17 @@
     return a.replace(/\s*\([^)]*\)\s*$/, "").trim();
   }
 
-  /** 동·호수가 붙으면 검색이 흐려지므로 도로명+건물번호까지만 남긴다. */
   function roadOnly(addr) {
     const a = String(addr || "").replace(/\s+/g, " ").replace(/(로|길)\s+(\d+번길)/, "$1$2");
     const m = a.match(/^(.*?(?:로|길)\d*번?길?)\s+(\d+(?:-\d+)?)/);
     return m ? `${m[1]} ${m[2]}` : a.split(",")[0].trim();
   }
 
-  /** 카카오맵 버튼은 주소로만 검색한다 — 기관명을 섞으면 동명 업소로 튄다. */
   const kakaoLink = (f) =>
     "https://map.kakao.com/?q=" + encodeURIComponent(f.addr ? roadOnly(f.addr) : `${f.gu} ${f.name}`);
 
-  /* ─────────── 지도 ─────────── */
-
   let engine, pinHandles = [], meHandle = null, popHandle = null, idleTimer = null;
 
-  /** 같은 좌표의 기관들을 한 지점으로 묶는다 (흩뿌리면 서로 가려 클릭이 안 된다). */
   function buildGroups(list) {
     const byPos = new Map();
     for (const f of list) {
@@ -138,7 +107,6 @@
     return groups;
   }
 
-  /** 화면 1px 이 지도상 몇 m 인지 엔진에서 실측한다 (줌에만 의존, 패닝과 무관). */
   function metersPerPixel() {
     const c = engine.getCenter();
     const p = engine.project(c);
@@ -147,20 +115,13 @@
     return distanceM(a, b) / 64;
   }
 
-  /**
-   * 가까운 지점들을 묶는다. 확대할수록 자연히 풀린다.
-   *
-   * 격자는 반드시 **지도 좌표**에 고정해야 한다. 화면 픽셀로 격자를 만들면 패닝할 때마다
-   * 격자선이 데이터 위를 미끄러져, 줌이 같은데도 묶임이 계속 바뀐다.
-   * 셀 크기만 현재 줌의 m/px 로 환산해 화면상 크기를 일정하게 유지한다.
-   */
   function clusterGroups() {
     if (!engine || engine.getZoom() >= CLUSTER_MAX_ZOOM) {
       return state.groups.map((g) => ({ single: g, groups: [g], lat: g.lat, lon: g.lon }));
     }
     const cellM = CLUSTER_CELL * metersPerPixel();
     const M_LAT = 111320;
-    const M_LON = 111320 * Math.cos(GRID_LAT * Math.PI / 180);   // 기준 위도로 고정해 격자를 균일하게
+    const M_LON = 111320 * Math.cos(GRID_LAT * Math.PI / 180);
 
     const cells = new Map();
     for (const g of state.groups) {
@@ -176,7 +137,7 @@
         out.push({ single: groups[0], groups, lat: groups[0].lat, lon: groups[0].lon });
         continue;
       }
-      // 격자 모서리에 걸쳐 멀리 떨어진 것끼리 묶였으면 한 덩어리로 보여 주지 않는다
+
       const xs = groups.map((g) => g.lon * M_LON), ys = groups.map((g) => g.lat * M_LAT);
       const span = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
       if (span > spanLimitM) {
@@ -224,7 +185,7 @@
         el.title = `이 부근 ${total}곳`;
         el.addEventListener("click", (e) => {
           e.stopPropagation();
-          engine.zoomAround([c.lat, c.lon], Math.min(CLUSTER_MAX_ZOOM + 1, engine.getZoom() + 2));
+          engine.flyTo([c.lat, c.lon], Math.min(CLUSTER_MAX_ZOOM + 1, engine.getZoom() + 2));
         });
         pinHandles.push(engine.addOverlay(el, [c.lat, c.lon], { yAnchor: 0.5, zIndex: 40 }));
       }
@@ -238,7 +199,6 @@
     }
   }
 
-  /** 모바일에선 시트가 아래를 덮으므로 그만큼 지도를 밀어 마커가 가리지 않게 한다. */
   function panToWithSheet(lat, lon) {
     engine.panTo([lat, lon]);
     setTimeout(() => {
@@ -249,8 +209,6 @@
       engine.panTo(engine.unproject({ x: pt.x, y: pt.y + shift }));
     }, 260);
   }
-
-  /* ─────────── 필터 ─────────── */
 
   function apply() {
     const q = state.query.trim().toLowerCase();
@@ -273,8 +231,6 @@
     if (state.sheetMode === "list") renderSheetList();
     else if (state.selected && isDesktop()) showPopup(state.selected);
   }
-
-  /* ─────────── 렌더 ─────────── */
 
   function renderDays() {
     const today = localISO(new Date());
@@ -304,7 +260,7 @@
       if (!counts.get(c)) continue;
       const b = document.createElement("button");
       b.type = "button";
-      // 경기도 레이어는 "전체" 에 포함되지 않으므로 칩 배경을 달리해 별개 묶음임을 드러낸다.
+
       const ext = c !== ALL && CATS[c].set !== "anyang";
       b.className = "chip" + (c === ALL ? " chip--all" : "") + (ext ? " chip--ext" : "");
       b.dataset.cat = c;
@@ -316,7 +272,6 @@
     }
   }
 
-  /** 좁은 칸에서 "09:00~14:00" 이 넘치지 않도록 ~ 뒤에 줄바꿈 지점을 준다. */
   const timeHtml = (t) => esc(t).replace("~", "~<wbr>");
 
   function schedHtml(f) {
@@ -361,8 +316,6 @@
       ? `<b>같은 위치 ${g.items.length}곳</b>` : `<b>${esc(g.head.name)}</b>`}${
       withList ? `<button type="button" class="sheet__back" id="to-list">목록</button>` : ""}</div>`;
 
-  /* ─────────── PC 미니 팝업 ─────────── */
-
   function showPopup(g) {
     closePopup();
     const wrap = document.createElement("div");
@@ -379,8 +332,6 @@
       closePopup();
     });
 
-    // 팝업은 지도 컨테이너 안에 얹히므로 휠·드래그가 지도까지 올라가 줌·패닝이 걸린다.
-    // 전파만 끊고 기본 동작은 두어야 팝업 안에서는 그대로 스크롤된다.
     for (const ev of ["wheel", "mousewheel", "DOMMouseScroll", "mousedown", "dblclick", "touchmove"]) {
       wrap.addEventListener(ev, (e) => e.stopPropagation(), { passive: true });
     }
@@ -391,8 +342,6 @@
   function closePopup() {
     if (popHandle) { engine.removeOverlay(popHandle); popHandle = null; }
   }
-
-  /* ─────────── 모바일 하단 시트 ─────────── */
 
   let closeTimer = null;
 
@@ -414,7 +363,6 @@
     }, 190);
   }
 
-  /** 지도 빈 곳 클릭·ESC — 팝업과 시트를 모두 닫는다. */
   function closeDetail() {
     closePopup();
     hideSheet();
@@ -485,8 +433,6 @@
     }
   }
 
-  /* ─────────── 안내 ─────────── */
-
   function renderInfo() {
     const m = state.meta;
     const osm = engine.name === "osm";
@@ -508,8 +454,6 @@
       <p>오류 제보·문의: <a href="mailto:${MAIL}">${MAIL}</a></p>`;
   }
 
-  /* ─────────── 내 위치 ─────────── */
-
   function locate() {
     const btn = $("#btn-locate");
     if (state.origin) {
@@ -530,7 +474,7 @@
         if (meHandle) engine.removeOverlay(meHandle);
         meHandle = engine.addOverlay(dot, state.origin, { yAnchor: 0.5, xAnchor: 0.5, zIndex: 20 });
         btn.classList.add("on");
-        engine.zoomAround(state.origin, 16);
+        engine.flyTo(state.origin, 16);
         if (state.sheetMode === "list") renderSheetList();
       },
       () => { btn.disabled = false; alert("위치를 가져오지 못했습니다. 브라우저 위치 권한을 확인해 주세요."); },
@@ -538,12 +482,6 @@
     );
   }
 
-  /* ─────────── 엔진 전환 ─────────── */
-
-  /**
-   * 지도 엔진을 세우거나 갈아끼운다. force 는 "osm" | "kakao" | undefined(자동).
-   * 전환해도 보던 위치·줌·필터·내 위치는 그대로 유지한다.
-   */
   async function setEngine(force) {
     const keep = engine ? { center: engine.getCenter(), zoom: engine.getZoom() } : null;
     if (engine) {
@@ -561,13 +499,13 @@
     });
     document.body.dataset.engine = engine.name;
     engine.on("click", closeDetail);
-    engine.on("idle", () => {           // 확대/이동하면 클러스터를 다시 묶는다
+    engine.on("idle", () => {
       clearTimeout(idleTimer);
       idleTimer = setTimeout(renderPins, 90);
     });
     if (!keep) engine.fitBounds(state.all.filter((f) => f.set === "anyang").map((f) => [f.lat, f.lon]));
 
-    if (state.origin) {                 // 내 위치 점도 새 엔진에 다시 얹는다
+    if (state.origin) {
       const dot = document.createElement("div");
       dot.className = "medot";
       meHandle = engine.addOverlay(dot, state.origin, { yAnchor: 0.5, xAnchor: 0.5, zIndex: 20 });
@@ -576,8 +514,6 @@
     renderPins();
     return engine.name;
   }
-
-  /* ─────────── 시작 ─────────── */
 
   function pickDefaultDay() {
     const today = localISO(new Date());
@@ -631,7 +567,6 @@
     $("#btn-info").addEventListener("click", () => $("#info").showModal());
     document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDetail(); });
 
-    // 쿼터 소진 상황을 실제로 만들지 않고 폴백을 확인하려고 열어 둔 테스트 훅.
     window.mapEngine = {
       current: () => engine.name,
       useOSM: () => setEngine("osm"),
