@@ -222,7 +222,8 @@
         el.title = `이 부근 ${total}곳`;
         el.addEventListener("click", (e) => {
           e.stopPropagation();
-          engine.zoomAround([c.lat, c.lon], Math.min(CLUSTER_MAX_ZOOM + 1, engine.getZoom() + 2));
+          // 묶인 곳들이 한눈에 들어오게 그 범위로 맞춘다. 위쪽은 검색·필터가 덮으므로 더 띄운다.
+          engine.fitBounds(c.groups.map((g) => [g.lat, g.lon]), [96, 56, 64, 56], CLUSTER_MAX_ZOOM + 2);
         });
         pinHandles.push(engine.addOverlay(el, [c.lat, c.lon], { yAnchor: 0.5, zIndex: 40 }));
       }

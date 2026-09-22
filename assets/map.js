@@ -58,11 +58,13 @@ window.MapEngine = (() => {
       setCenter(pos) { map.setCenter(ll(pos)); },
       getCenter() { const c = map.getCenter(); return [c.getLat(), c.getLng()]; },
       destroy() { el.innerHTML = ""; },
-      fitBounds(points, pad = 26) {
+      fitBounds(points, pad = 26, maxZoom) {
         if (!points.length) return;
+        const [t, r, bt, l] = Array.isArray(pad) ? pad : [pad, pad, pad, pad];
         const b = new kakao.maps.LatLngBounds();
         points.forEach((p) => b.extend(ll(p)));
-        map.setBounds(b, pad, pad, pad, pad);
+        map.setBounds(b, t, r, bt, l);
+        if (maxZoom != null && toZoom(map.getLevel()) > maxZoom) map.setLevel(toLevel(maxZoom));
       },
       addOverlay(element, pos, o = {}) {
         const ov = new kakao.maps.CustomOverlay({
@@ -129,12 +131,13 @@ window.MapEngine = (() => {
       setCenter(pos) { view.setCenter(coord(pos)); },
       getCenter() { const c = ol.proj.toLonLat(view.getCenter()); return [c[1], c[0]]; },
       destroy() { map.setTarget(null); el.innerHTML = ""; },
-      fitBounds(points, pad = 26) {
+      fitBounds(points, pad = 26, maxZoom = 17) {
         if (!points.length) return;
+        const p4 = Array.isArray(pad) ? pad : [pad, pad, pad, pad];
         const lons = points.map((p) => p[1]), lats = points.map((p) => p[0]);
         view.fit(ol.proj.transformExtent(
           [Math.min(...lons), Math.min(...lats), Math.max(...lons), Math.max(...lats)],
-          "EPSG:4326", "EPSG:3857"), { size: map.getSize(), padding: [pad, pad, pad, pad], maxZoom: 17 });
+          "EPSG:4326", "EPSG:3857"), { size: map.getSize(), padding: p4, maxZoom, duration: 260 });
       },
       addOverlay(element, pos, o = {}) {
 
