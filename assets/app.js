@@ -87,6 +87,8 @@
     return m ? `${m[1]} ${m[2]}` : a.split(",")[0].trim();
   }
 
+  const fullAddr = (f) => String(f.addr || "").replace(/\s+/g, " ").trim();
+
   const kakaoLink = (f) =>
     "https://map.kakao.com/?q=" + encodeURIComponent(f.addr ? roadOnly(f.addr) : `${f.gu} ${f.name}`);
 
@@ -303,7 +305,9 @@
         <span class="card__kind">${esc(f.kind)}</span>
       </div>
       <div class="card__addr"><em>${esc(f.gu)}</em> ${esc(shortAddr(f)) || "주소 미표기"}${
-        f.partner ? ` · 협약약국 ${esc(f.partner)}` : ""}</div>
+        f.addr ? `<button type="button" class="copy" data-copy="${esc(fullAddr(f))}" aria-label="주소 복사" title="주소 복사">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/></svg>
+        </button>` : ""}${f.partner ? ` · 협약약국 ${esc(f.partner)}` : ""}</div>
       ${schedHtml(f)}
       <div class="acts">
         ${tel ? `<a class="call" href="tel:${tel.replace(/[^0-9+]/g, "")}">전화 ${esc(tel)}</a>` : ""}
@@ -595,6 +599,28 @@
     $("#btn-locate").addEventListener("click", locate);
     $("#sheet-close").addEventListener("click", closeDetail);
     $("#btn-info").addEventListener("click", () => $("#info").showModal());
+    document.addEventListener("click", async (e) => {
+      const btn = e.target.closest("[data-copy]");
+      if (!btn) return;
+      e.stopPropagation();
+      const text = btn.dataset.copy;
+      let ok = true;
+      try {
+        if (navigator.clipboard && window.isSecureContext) await navigator.clipboard.writeText(text);
+        else {
+          const ta = document.createElement("textarea");
+          ta.value = text;
+          ta.style.cssText = "position:fixed;top:-1000px";
+          document.body.appendChild(ta);
+          ta.select();
+          ok = document.execCommand("copy");
+          ta.remove();
+        }
+      } catch (_) { ok = false; }
+      btn.classList.add(ok ? "is-done" : "is-fail");
+      setTimeout(() => btn.classList.remove("is-done", "is-fail"), 1200);
+    });
+
     document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDetail(); });
 
     window.mapEngine = {
