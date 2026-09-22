@@ -157,7 +157,7 @@ body[data-engine="osm"] .bar__engine {
   top: 8px;
   left: max(8px, env(safe-area-inset-left));
   right: max(8px, env(safe-area-inset-right));
-  max-width: 560px;
+  max-width: 460px;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 6px;
@@ -167,7 +167,7 @@ body[data-engine="osm"] .bar__engine {
 .ov--top > * { pointer-events: auto; }
 
 .search {
-  width: min(360px, 100%);
+  width: 100%;
   display: flex;
   align-items: center;
   gap: 7px;
@@ -207,7 +207,8 @@ body[data-engine="osm"] .bar__engine {
   box-shadow: var(--shadow-m);
 }
 .chips-panel[hidden] { display: none; }
-.chip--more { flex: none; padding: 0 11px; font-weight: 700; }
+/* 칩 행의 오른쪽 끝을 검색창 오른쪽 끝과 맞춘다. */
+.chip--more { flex: none; margin-left: auto; padding: 0 11px; font-weight: 700; }
 .chip--more[aria-expanded="true"] { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
 .chip--more.has-on { border-color: var(--accent); color: var(--accent); }
 .chip {
