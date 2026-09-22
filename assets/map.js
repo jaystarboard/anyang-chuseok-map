@@ -65,6 +65,8 @@ window.MapEngine = (() => {
       zoomAround(pos, z) { map.setLevel(toLevel(z), { anchor: ll(pos), animate: true }); },
       panTo(pos) { map.panTo(ll(pos)); },
       setCenter(pos) { map.setCenter(ll(pos)); },
+      getCenter() { const c = map.getCenter(); return [c.getLat(), c.getLng()]; },
+      destroy() { el.innerHTML = ""; },
       fitBounds(points, pad = 26) {
         if (!points.length) return;
         const b = new kakao.maps.LatLngBounds();
@@ -128,6 +130,8 @@ window.MapEngine = (() => {
       zoomAround(pos, z) { view.animate({ center: coord(pos), zoom: z, duration: 260 }); },
       panTo(pos) { view.animate({ center: coord(pos), duration: 260 }); },
       setCenter(pos) { view.setCenter(coord(pos)); },
+      getCenter() { const c = ol.proj.toLonLat(view.getCenter()); return [c[1], c[0]]; },
+      destroy() { map.setTarget(null); el.innerHTML = ""; },
       fitBounds(points, pad = 26) {
         if (!points.length) return;
         const lons = points.map((p) => p[1]), lats = points.map((p) => p[0]);
@@ -161,8 +165,13 @@ window.MapEngine = (() => {
 
   /* ───────────────────── 팩토리 ───────────────────── */
 
+  /**
+   * opts.force 로 엔진을 강제할 수 있다 ("osm" | "kakao").
+   * 쿼터 소진 상황을 실제로 만들지 않고도 폴백 화면을 확인하려고 둔 장치.
+   * "kakao" 를 강제해도 SDK 가 없으면 실제 동작대로 OSM 으로 내려간다.
+   */
   async function create(el, opts) {
-    if (await kakaoReady()) {
+    if (opts.force !== "osm" && await kakaoReady()) {
       try {
         return kakaoAdapter(el, opts);
       } catch (err) {

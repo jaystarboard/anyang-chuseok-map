@@ -538,6 +538,45 @@
     );
   }
 
+  /* ─────────── 엔진 전환 ─────────── */
+
+  /**
+   * 지도 엔진을 세우거나 갈아끼운다. force 는 "osm" | "kakao" | undefined(자동).
+   * 전환해도 보던 위치·줌·필터·내 위치는 그대로 유지한다.
+   */
+  async function setEngine(force) {
+    const keep = engine ? { center: engine.getCenter(), zoom: engine.getZoom() } : null;
+    if (engine) {
+      pinHandles.forEach((h) => engine.removeOverlay(h));
+      pinHandles = [];
+      closePopup();
+      if (meHandle) { engine.removeOverlay(meHandle); meHandle = null; }
+      engine.destroy();
+    }
+
+    engine = await MapEngine.create($("#map"), {
+      center: keep ? keep.center : [37.3935, 126.9465],
+      zoom: keep ? keep.zoom : 13,
+      force,
+    });
+    document.body.dataset.engine = engine.name;
+    engine.on("click", closeDetail);
+    engine.on("idle", () => {           // 확대/이동하면 클러스터를 다시 묶는다
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(renderPins, 90);
+    });
+    if (!keep) engine.fitBounds(state.all.filter((f) => f.set === "anyang").map((f) => [f.lat, f.lon]));
+
+    if (state.origin) {                 // 내 위치 점도 새 엔진에 다시 얹는다
+      const dot = document.createElement("div");
+      dot.className = "medot";
+      meHandle = engine.addOverlay(dot, state.origin, { yAnchor: 0.5, xAnchor: 0.5, zIndex: 20 });
+    }
+    renderInfo();
+    renderPins();
+    return engine.name;
+  }
+
   /* ─────────── 시작 ─────────── */
 
   function pickDefaultDay() {
@@ -566,18 +605,10 @@
     ];
     pickDefaultDay();
 
-    engine = await MapEngine.create($("#map"), { center: [37.3935, 126.9465], zoom: 13 });
-    document.body.dataset.engine = engine.name;
-    engine.on("click", closeDetail);
-    engine.on("idle", () => {           // 확대/이동하면 클러스터를 다시 묶는다
-      clearTimeout(idleTimer);
-      idleTimer = setTimeout(renderPins, 90);
-    });
+    await setEngine(new URLSearchParams(location.search).get("map") || undefined);
     new ResizeObserver(() => engine.relayout()).observe($("#map"));
-    engine.fitBounds(state.all.filter((f) => f.set === "anyang").map((f) => [f.lat, f.lon]));
 
     renderDays();
-    renderInfo();
     apply();
 
     let t;
@@ -612,6 +643,22 @@
     $("#sheet-close").addEventListener("click", closeDetail);
     $("#btn-info").addEventListener("click", () => $("#info").showModal());
     document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDetail(); });
+
+    // 쿼터 소진 상황을 실제로 만들지 않고 폴백을 확인하려고 열어 둔 테스트 훅.
+    window.mapEngine = {
+      current: () => engine.name,
+      useOSM: () => setEngine("osm"),
+      useKakao: () => setEngine("kakao"),
+      toggle: () => setEngine(engine.name === "kakao" ? "osm" : "kakao"),
+    };
+    console.info(
+      "%c지도 엔진 전환 %c현재: " + engine.name,
+      "background:#1a6fd4;color:#fff;padding:2px 6px;border-radius:4px",
+      "color:#5a626d",
+      "\n  mapEngine.useOSM()    무료 쿼터 소진 시 화면 (OpenStreetMap)" +
+      "\n  mapEngine.useKakao()  카카오맵으로 복귀" +
+      "\n  mapEngine.toggle()    번갈아 전환" +
+      "\n  URL 에 ?map=osm 을 붙여도 같습니다.");
   }
 
   boot();

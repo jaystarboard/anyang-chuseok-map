@@ -79,6 +79,16 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
   border-radius: 999px;
   padding: 2px 8px;
 }
+/* 카카오를 못 쓰고 OSM 으로 내려갔을 때만 보이는 표시 */
+.bar__engine { display: none; }
+body[data-engine="osm"] .bar__engine {
+  display: inline;
+  flex: none;
+  font-size: 11px; font-weight: 700;
+  color: #8a5a00; background: #fff4de;
+  border-radius: 999px; padding: 2px 7px;
+}
+
 .bar__info {
   flex: none;
   margin-left: auto;
