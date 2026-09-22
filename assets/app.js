@@ -31,9 +31,8 @@
 
   /** 필터는 한 번에 하나만 고른다. "전체" 는 안양시 6종 전부. */
   const ALL = "전체";
+  /** 필터 칩 순서. 전부 한 화면에 보이도록 줄바꿈으로 펼친다. */
   const CAT_LIST = [ALL, ...Object.keys(CATS)];
-  /** 필터 줄에 항상 보이는 분류. 나머지는 +N 패널로 접는다. */
-  const PRIMARY = [ALL, "응급실", "병원", "의원", "약국"];
 
   /** 같은 지점에 묶였을 때 대표로 세울 분류. 급할 때 찾는 쪽이 앞, 약국이 맨 뒤. */
   const PRIORITY = new Map(
@@ -56,7 +55,6 @@
     groups: [],
     selected: null,
     sheetMode: null,
-    chipsOpen: false,
   };
 
   const $ = (s) => document.querySelector(s);
@@ -276,64 +274,20 @@
       if (f.set === "anyang") counts.set(ALL, (counts.get(ALL) || 0) + 1);
     }
 
-    // 고른 분류가 +N 안에 숨으면 뭘 보고 있는지 알 수 없으니 바 안으로 올린다.
-    const pinned = PRIMARY.includes(state.cat) ? PRIMARY : [...PRIMARY, state.cat];
-    const order = [...pinned, ...CAT_LIST.filter((c) => !pinned.includes(c))];
-
     const bar = $("#chips");
     bar.innerHTML = "";
-    $("#chips-panel").innerHTML = "";
-
-    for (const c of order) {
+    for (const c of CAT_LIST) {
       if (!counts.get(c)) continue;
       const b = document.createElement("button");
       b.type = "button";
       b.className = "chip" + (c === ALL ? " chip--all" : "");
       b.dataset.cat = c;
-      if (pinned.includes(c)) b.dataset.pinned = "1";
       if (c !== ALL) b.style.setProperty("--c", CATS[c].color);
       b.setAttribute("aria-pressed", String(state.cat === c));
       b.innerHTML = (c === ALL ? "" : "<i></i>") + `${esc(c)}<b>${counts.get(c)}</b>`;
       b.addEventListener("click", () => { state.cat = c; apply(); });
       bar.appendChild(b);
     }
-    layoutChips();
-  }
-
-  /**
-   * 고정(pinned) 칩은 줄에 남기고 나머지는 +N 패널로 접는다.
-   * 화면이 더 좁아 고정 칩조차 넘치면 폭을 재서 뒤쪽부터 마저 접는다.
-   */
-  function layoutChips() {
-    const bar = $("#chips"), panel = $("#chips-panel"), more = $("#chips-more");
-    while (panel.firstChild) bar.appendChild(panel.firstChild);
-
-    const avail = $(".ov--top").clientWidth;
-    const kids = [...bar.children];
-    const narrow = window.innerWidth <= 560;
-    const GAP = narrow ? 4 : 5, MORE_W = narrow ? 44 : 58;
-    let cut = kids.filter((k) => k.dataset.pinned).length;
-
-    let used = 0;
-    for (let i = 0; i < cut; i++) {
-      used += kids[i].offsetWidth + (i ? GAP : 0);
-      if (used > avail - MORE_W - GAP) { cut = i; break; }
-    }
-    if (cut < 1) cut = 1;
-
-    if (cut >= kids.length) {
-      more.hidden = true;
-      panel.hidden = true;
-      state.chipsOpen = false;
-      more.setAttribute("aria-expanded", "false");
-      return;
-    }
-    kids.slice(cut).forEach((k) => panel.appendChild(k));
-    more.hidden = false;
-    more.innerHTML = `+${kids.length - cut}`;
-    more.classList.remove("has-on");
-    more.setAttribute("aria-expanded", String(state.chipsOpen));
-    panel.hidden = !state.chipsOpen;
   }
 
   function schedHtml(f) {
@@ -634,19 +588,6 @@
       apply();
       $("#search").focus();
     });
-    $("#chips-more").addEventListener("click", (e) => {
-      e.stopPropagation();
-      state.chipsOpen = !state.chipsOpen;
-      layoutChips();
-    });
-    document.addEventListener("click", (e) => {
-      if (!state.chipsOpen) return;
-      if (e.target.closest("#chips-panel") || e.target.closest("#chips-more")) return;
-      state.chipsOpen = false;
-      layoutChips();
-    });
-    new ResizeObserver(() => layoutChips()).observe($(".ov--top"));
-
     $("#btn-list").addEventListener("click", () =>
       (state.sheetMode === "list" ? closeDetail() : renderSheetList()));
     $("#btn-locate").addEventListener("click", locate);

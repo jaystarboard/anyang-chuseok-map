@@ -192,32 +192,15 @@ body[data-engine="osm"] .bar__engine {
 }
 .search button svg { width: 13px; height: 13px; stroke-width: 2.4; }
 
-/* 칩이 한 줄을 넘치면 가로 스크롤 대신 +N 으로 접고, 누르면 아래 패널에 펼친다. */
-.chipbar { display: flex; gap: 5px; width: 100%; padding: 1px; }
-.chips { display: flex; gap: 5px; overflow: hidden; flex: 0 1 auto; min-width: 0; }
-.chips-panel {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-  width: min(340px, 100%);
-  padding: 7px;
-  background: var(--surface);
-  border: 1px solid var(--border-strong);
-  border-radius: 11px;
-  box-shadow: var(--shadow-m);
-}
-.chips-panel[hidden] { display: none; }
-/* 칩 행의 오른쪽 끝을 검색창 오른쪽 끝과 맞춘다. */
-.chip--more { flex: none; margin-left: auto; padding: 0 11px; font-weight: 700; }
-.chip--more[aria-expanded="true"] { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
-.chip--more.has-on { border-color: var(--accent); color: var(--accent); }
+/* 분류는 한 번에 하나만 고르므로 접지 않고 줄바꿈으로 전부 보여 준다. */
+.chips { display: flex; flex-wrap: wrap; gap: 4px; width: 100%; padding: 1px; }
 .chip {
   flex: none;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  height: 28px;
-  padding: 0 9px;
+  gap: 4px;
+  height: 26px;
+  padding: 0 8px;
   border: 1px solid var(--border-strong);
   border-radius: 999px;
   background: var(--surface);
@@ -228,7 +211,7 @@ body[data-engine="osm"] .bar__engine {
   cursor: pointer;
   white-space: nowrap;
 }
-.chip i { width: 7px; height: 7px; border-radius: 50%; background: var(--c); flex: none; }
+.chip i { width: 6px; height: 6px; border-radius: 50%; background: var(--c); flex: none; }
 .chip--all { --c: var(--accent); }
 .chip b { font-weight: 700; color: var(--text-faint); font-variant-numeric: tabular-nums; }
 .chip:hover { background: var(--surface-2); }
@@ -556,10 +539,9 @@ body[data-engine="osm"] .bar__engine {
 
 /* 좁은 화면에서도 응급실·병원·의원·약국 네 개는 줄에 남도록 칩을 조밀하게 만든다. */
 @media (max-width: 560px) {
-  .chipbar, .chips { gap: 4px; }
-  .chip { height: 26px; padding: 0 7px; font-size: 11.5px; gap: 4px; }
-  .chip i { width: 6px; height: 6px; }
-  .chip--more { padding: 0 8px; }
+  .chips { gap: 3px; }
+  .chip { height: 24px; padding: 0 6px; font-size: 11px; gap: 3px; }
+  .chip i { width: 5px; height: 5px; }
   .search { height: 34px; }
   .search input { font-size: 13px; }
 }
