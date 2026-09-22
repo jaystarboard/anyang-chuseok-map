@@ -310,21 +310,24 @@
     }
   }
 
+  /** 좁은 칸에서 "09:00~14:00" 이 넘치지 않도록 ~ 뒤에 줄바꿈 지점을 준다. */
+  const timeHtml = (t) => esc(t).replace("~", "~<wbr>");
+
   function schedHtml(f) {
     if (f.set === "er") {
       return `<div class="sched"><div class="sel">24시간 응급실<span>${esc(f.cat)}</span></div></div>`;
     }
     if (f.set === "moon") {
       const rows = f.holiday
-        ? [`<div class="sel">${esc(f.holiday.replace(/^\([^)]*\)\s*/, ""))}<span>연휴(토·일·공)</span></div>`]
+        ? [`<div class="sel">${timeHtml(f.holiday.replace(/^\([^)]*\)\s*/, ""))}<span>연휴(토·일·공)</span></div>`]
         : [`<div class="off">미표기<span>연휴 시간</span></div>`];
-      if (f.weekday) rows.push(`<div class="off">${esc(f.weekday.replace(/^\([^)]*\)\s*/, ""))}<span>평일</span></div>`);
+      if (f.weekday) rows.push(`<div class="off">${timeHtml(f.weekday.replace(/^\([^)]*\)\s*/, ""))}<span>평일</span></div>`);
       return `<div class="sched">${rows.join("")}</div>`;
     }
     return `<div class="sched">${state.meta.days.map((d, i) => {
       const h = f.hours[i];
       const cls = i === state.dayIndex ? "sel" : (h ? "" : "off");
-      return `<div class="${cls}">${h ? (h === ALWAYS_OPEN ? "24시간" : esc(h)) : "휴무"}<span>${d.label} ${d.dow}</span></div>`;
+      return `<div class="${cls}">${h ? (h === ALWAYS_OPEN ? "24시간" : timeHtml(h)) : "휴무"}<span>${d.label} ${d.dow}</span></div>`;
     }).join("")}</div>`;
   }
 

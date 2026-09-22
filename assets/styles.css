@@ -330,7 +330,7 @@ body[data-engine="osm"] .bar__engine {
 .popwrap { padding-bottom: 46px; }          /* 마커 위로 띄운다 */
 .pop {
   position: relative;
-  width: 296px;
+  width: 324px;
   max-width: calc(100vw - 32px);
   background: var(--surface);
   border: 1px solid var(--border-strong);
@@ -466,11 +466,13 @@ body[data-engine="osm"] .bar__engine {
 .sched div {
   flex: 1 1 0;
   min-width: 0;
+  overflow-wrap: break-word;
   border: 1px solid var(--border);
   border-radius: 7px;
-  padding: 4px 3px;
+  padding: 4px 2px;
   text-align: center;
   font-size: 11px;
+  letter-spacing: -.02em;
   color: var(--text-dim);
   font-variant-numeric: tabular-nums;
   line-height: 1.3;
