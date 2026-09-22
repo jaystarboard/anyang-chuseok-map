@@ -26,6 +26,7 @@
       .map((c, i) => [c, i]));
 
   const ZOOM_MIN = 10, ZOOM_MAX = 19;
+  const SELECTED_Z = 200;      // 마커(<=100)보다 위, 팝업(300)보다 아래
   const CLUSTER_CELL = 44;
   const CLUSTER_MAX_ZOOM = 15;
   const CLUSTER_SPAN_MAX = 46;
@@ -204,7 +205,7 @@
   function renderPins() {
     pinHandles.forEach((h) => engine.removeOverlay(h));
     pinHandles = [];
-    state.groups.forEach((g) => { g.el = null; });
+    state.groups.forEach((g) => { g.el = null; g.ov = null; });
 
     for (const c of clusterGroups()) {
       if (c.single) {
@@ -218,8 +219,8 @@
         el.innerHTML = esc(meta.ch) + (g.items.length > 1 ? `<sup>${g.items.length}</sup>` : "");
         el.addEventListener("click", (e) => { e.stopPropagation(); selectGroup(g); });
         g.el = el;
-        pinHandles.push(engine.addOverlay(el, [g.lat, g.lon],
-          { zIndex: 100 - PRIORITY.get(g.head.cat) }));
+        g.ov = engine.addOverlay(el, [g.lat, g.lon], { zIndex: baseZ(g) });
+        pinHandles.push(g.ov);
       } else {
         const total = c.groups.reduce((s, g) => s + g.items.length, 0);
         const top = c.groups.map((g) => g.head.cat)
@@ -244,9 +245,15 @@
     markSelection();
   }
 
+  const baseZ = (g) => 100 - PRIORITY.get(g.head.cat);
+
   function markSelection() {
     for (const g of state.groups) {
-      if (g.el) g.el.classList.toggle("is-on", Boolean(state.selected) && g.key === state.selected.key);
+      if (!g.el) continue;
+      const on = Boolean(state.selected) && g.key === state.selected.key;
+      g.el.classList.toggle("is-on", on);
+      // CSS z-index 는 오버레이 래퍼 안쪽이라 소용없다. 오버레이 자체를 올려야 가려지지 않는다.
+      if (g.ov) engine.setOverlayZ(g.ov, on ? SELECTED_Z : baseZ(g));
     }
   }
 
