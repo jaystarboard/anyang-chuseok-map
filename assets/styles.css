@@ -136,6 +136,7 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
   top: 8px; left: 8px; right: 8px;
   max-width: 560px;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 6px;
   justify-items: start;
   pointer-events: none;

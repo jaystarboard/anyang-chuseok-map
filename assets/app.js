@@ -136,6 +136,8 @@
         yAnchor: 1,
         xAnchor: 0.5,
         clickable: true,
+        // 응급실처럼 급할 때 찾는 분류가 약국 더미에 묻히지 않도록 우선순위를 z 로 준다
+        zIndex: 100 - PRIORITY.get(g.head.cat),
       });
       ov.setMap(map);
       g.el = el;
@@ -237,7 +239,7 @@
     const bar = $("#chips"), panel = $("#chips-panel"), more = $("#chips-more");
     while (panel.firstChild) bar.appendChild(panel.firstChild);
 
-    const avail = bar.parentElement.clientWidth;
+    const avail = document.querySelector('.ov--top').clientWidth;
     const kids = [...bar.children];
     const GAP = 5, MORE_W = 58;
     let used = 0, cut = kids.length;
